@@ -1,0 +1,41 @@
+<%# locals: (budget:, available_budgets:) %>
+
+<dialog id="clone-budget-modal" class="bg-container rounded-xl shadow-xl p-6 max-w-md">
+  <div class="flex items-center justify-between mb-4">
+    <h2 class="text-lg font-medium">Clone Budget</h2>
+    <button onclick="document.getElementById('clone-budget-modal').close()" class="p-2 hover:bg-alpha-black-25 rounded-md">
+      <%= icon "x" %>
+    </button>
+  </div>
+
+  <p class="text-secondary mb-4">
+    Copy budget data from another month to <%= budget.name %>.
+  </p>
+
+  <form action="<%= clone_budget_path(budget) %>" method="post" class="space-y-4">
+    <%= hidden_field_tag :authenticity_token, form_authenticity_token %>
+    
+    <div>
+      <label for="source_month_year" class="block text-sm font-medium mb-2">
+        Select month to clone from:
+      </label>
+      <select name="source_month_year" id="source_month_year" class="w-full px-3 py-2 border border-primary rounded-md bg-container" required>
+        <option value="">-- Select a month --</option>
+        <% available_budgets.each do |available_budget| %>
+          <option value="<%= available_budget.to_param %>">
+            <%= available_budget.name %>
+          </option>
+        <% end %>
+      </select>
+    </div>
+
+    <div class="flex gap-2 justify-end">
+      <button type="button" onclick="document.getElementById('clone-budget-modal').close()" class="px-4 py-2 border border-primary rounded-md hover:bg-alpha-black-25">
+        Cancel
+      </button>
+      <button type="submit" class="px-4 py-2 bg-primary text-primary rounded-md hover:opacity-90">
+        Clone Budget
+      </button>
+    </div>
+  </form>
+</dialog>
