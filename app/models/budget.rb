@@ -26,7 +26,7 @@ class Budget < ApplicationRecord
     def budget_date_valid?(date, family:)
       beginning_of_month = date.beginning_of_month
 
-      beginning_of_month >= oldest_valid_budget_date(family) && beginning_of_month <= Date.current.end_of_month
+      beginning_of_month >= oldest_valid_budget_date(family)
     end
 
     def find_or_bootstrap(family, start_date:)
@@ -83,6 +83,33 @@ class Budget < ApplicationRecord
     budget_categories.where(category_id: categories_to_remove).destroy_all if categories_to_remove.any?
   end
 
+  def clone_from(source_budget)
+    return false unless source_budget.is_a?(Budget)
+    return false if source_budget.family_id != family_id
+
+    transaction do
+      # Copy budget-level values
+      update!(
+        budgeted_spending: source_budget.budgeted_spending,
+        expected_income: source_budget.expected_income
+      )
+
+      # Ensure all categories are synced first
+      sync_budget_categories
+
+      # Clone budget category allocations
+      source_budget.budget_categories.each do |source_bc|
+        target_bc = budget_categories.find_by(category_id: source_bc.category_id)
+        target_bc&.update!(budgeted_spending: source_bc.budgeted_spending)
+      end
+    end
+
+    true
+  rescue => e
+    Rails.logger.error "Failed to clone budget: #{e.message}"
+    false
+  end
+
   def uncategorized_budget_category
     budget_categories.uncategorized.tap do |bc|
       bc.budgeted_spending = [ available_to_allocate, 0 ].max
@@ -122,8 +149,6 @@ class Budget < ApplicationRecord
   end
 
   def next_budget_param
-    return nil if current?
-
     next_date = start_date + 1.month
     return nil unless self.class.budget_date_valid?(next_date, family: family)
 

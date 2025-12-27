@@ -48,14 +48,21 @@
       <div class="flex items-center justify-between mb-4">
         <h2 class="text-lg font-medium">Categories</h2>
 
-        <% if @budget.initialized? %>
-          <%= render DS::Link.new(
-            text: "Edit",
-            variant: "secondary",
-            icon: "settings-2",
-            href: budget_budget_categories_path(@budget)
-          ) %>
-        <% end %>
+        <div class="flex items-center gap-2">
+          <button onclick="document.getElementById('clone-budget-modal').showModal()" class="px-3 py-2 border border-primary rounded-md hover:bg-alpha-black-25 text-sm font-medium flex items-center gap-2">
+            <%= icon "copy", size: "sm" %>
+            Clone from
+          </button>
+
+          <% if @budget.initialized? %>
+            <%= render DS::Link.new(
+              text: "Edit",
+              variant: "secondary",
+              icon: "settings-2",
+              href: budget_budget_categories_path(@budget)
+            ) %>
+          <% end %>
+        </div>
       </div>
 
       <div class="bg-container-inset rounded-xl p-1">
@@ -63,4 +70,6 @@
       </div>
     </div>
   </div>
+
+  <%= render "budgets/clone_modal", budget: @budget, available_budgets: @available_budgets %>
 </div>
