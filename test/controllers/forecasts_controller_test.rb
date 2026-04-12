@@ -27,6 +27,7 @@ class ForecastsControllerTest < ActionDispatch::IntegrationTest
     end
 
     assert_redirected_to forecasts_url
+    assert_equal 1.day.from_now.to_date, Forecast.order(:created_at).last.occurs_on
   end
 
   test "should materialize forecast" do

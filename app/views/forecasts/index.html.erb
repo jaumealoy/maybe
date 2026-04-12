@@ -131,7 +131,7 @@
                 <span>·</span>
                 <span><%= forecast.category.name %></span>
               <% end %>
-              <% if forecast.tags.any? %>
+              <% if forecast.tags.present? %>
                 <span>·</span>
                 <span><%= forecast.tags.map(&:name).join(", ") %></span>
               <% end %>

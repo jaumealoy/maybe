@@ -4,7 +4,7 @@
   <% end %>
 
   <section class="space-y-4">
-    <%= form.text_field :name, label: "Description", required: true, autofocus: true %>
+    <%= form.text_field :name, label: "Name", required: true, autofocus: true %>
     <%= form.collection_select :account_id, @accounts, :id, :name, { label: "Account" }, required: true %>
     <%= form.money_field :amount, label: "Amount", required: true %>
     <%= form.select :currency, Current.family.accounts.manual.visible.distinct.pluck(:currency).presence || [ Current.family.currency ], { label: "Currency" }, required: true %>
