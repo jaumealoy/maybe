@@ -1,0 +1,26 @@
+<%= styled_form_with model: forecast, class: "space-y-4", data: { turbo_frame: :_top } do |form| %>
+  <% if forecast.errors.any? %>
+    <%= render "shared/form_errors", model: forecast %>
+  <% end %>
+
+  <section class="space-y-4">
+    <%= form.text_field :name, label: "Description", required: true, autofocus: true %>
+    <%= form.collection_select :account_id, @accounts, :id, :name, { label: "Account" }, required: true %>
+    <%= form.money_field :amount, label: "Amount", required: true %>
+    <%= form.select :currency, Current.family.accounts.manual.visible.distinct.pluck(:currency).presence || [ Current.family.currency ], { label: "Currency" }, required: true %>
+    <%= form.select :kind, [["Expense", "expense"], ["Income", "income"]], { label: "Type" }, required: true %>
+    <%= form.select :schedule, [["Monthly", "monthly"], ["One time", "one_time"]], { label: "Schedule" }, required: true %>
+    <%= form.date_field :occurs_on, label: "One-time date" %>
+    <%= form.number_field :day_of_month, label: "Day of month", min: 1, max: 31 %>
+    <%= form.date_field :starts_on, label: "Start date" %>
+    <%= form.date_field :ends_on, label: "End date" %>
+    <%= form.collection_select :category_id, Current.family.categories.alphabetically, :id, :name, { include_blank: "None", label: "Category" } %>
+    <%= form.select :tag_ids,
+                    Current.family.tags.alphabetically.pluck(:name, :id),
+                    { include_blank: "None", multiple: true, label: "Tags", container_class: "h-40" } %>
+  </section>
+
+  <section>
+    <%= form.submit %>
+  </section>
+<% end %>
