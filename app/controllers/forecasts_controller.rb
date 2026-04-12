@@ -2,18 +2,30 @@ class ForecastsController < ApplicationController
   before_action :set_accounts
   before_action :set_forecast, only: %i[edit update destroy materialize]
 
+  ACCOUNT_SHORTCUTS = {
+    "Cash" => [ "Depository" ],
+    "Investments" => [ "Investment", "Crypto" ],
+    "Properties" => [ "Property" ]
+  }.freeze
+
   def index
+    @selected_account_set = selected_account_set
     @selected_account_ids = selected_account_ids
-    @window = Forecast::Window.from_key(params[:window])
+    @window = Forecast::Window.from_key(params[:window], offset: params[:offset])
     @simulation = Forecast::Simulator.new(
       family: Current.family,
       account_ids: @selected_account_ids,
-      window: @window.key
+      window: @window.key,
+      offset: @window.offset
     ).call
+    @forecast_account_sets = Current.family.forecast_account_sets.alphabetically
+    @account_shortcuts = build_account_shortcuts
     @forecasts = Current.family.forecasts
       .includes(:account, :category, :tags)
       .for_accounts(@selected_account_ids.presence || @accounts.map(&:id))
       .alphabetically
+      .to_a
+      .sort_by { |forecast| [ forecast.next_occurrence_date || Date.new(9999, 12, 31), forecast.name ] }
 
     @breadcrumbs = [ [ "Forecast", nil ] ]
   end
@@ -74,9 +86,31 @@ class ForecastsController < ApplicationController
 
     def selected_account_ids
       ids = Array(params[:account_ids]).compact_blank
+      ids = @selected_account_set&.account_ids if ids.blank? && @selected_account_set.present?
       return @accounts.pluck(:id) if ids.blank?
 
       @accounts.where(id: ids).pluck(:id)
+    end
+
+    def selected_account_set
+      return nil if params[:account_set_id].blank?
+
+      account_set = Current.family.forecast_account_sets.find_by(id: params[:account_set_id])
+      return nil if account_set.blank?
+
+      explicit_ids = Array(params[:account_ids]).compact_blank.map(&:to_s)
+      return account_set if explicit_ids.blank? || explicit_ids.sort == account_set.account_ids.map(&:to_s).sort
+
+      nil
+    end
+
+    def build_account_shortcuts
+      ACCOUNT_SHORTCUTS.map do |label, accountable_types|
+        ids = @accounts.where(accountable_type: accountable_types).pluck(:id)
+        next if ids.empty?
+
+        { label: label, account_ids: ids }
+      end.compact
     end
 
     def set_forecast

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.2].define(version: 2026_04_12_090200) do
+ActiveRecord::Schema[7.2].define(version: 2026_04_12_100600) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pgcrypto"
   enable_extension "plpgsql"
@@ -276,6 +276,16 @@ ActiveRecord::Schema[7.2].define(version: 2026_04_12_090200) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["family_id"], name: "index_family_exports_on_family_id"
+  end
+
+  create_table "forecast_account_sets", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "family_id", null: false
+    t.string "name", null: false
+    t.jsonb "account_ids", default: [], null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["family_id", "name"], name: "index_forecast_account_sets_on_family_id_and_name", unique: true
+    t.index ["family_id"], name: "index_forecast_account_sets_on_family_id"
   end
 
   create_table "forecast_materializations", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -872,6 +882,7 @@ ActiveRecord::Schema[7.2].define(version: 2026_04_12_090200) do
   add_foreign_key "entries", "accounts"
   add_foreign_key "entries", "imports"
   add_foreign_key "family_exports", "families"
+  add_foreign_key "forecast_account_sets", "families"
   add_foreign_key "forecast_materializations", "entries"
   add_foreign_key "forecast_materializations", "forecasts"
   add_foreign_key "forecasts", "accounts"

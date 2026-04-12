@@ -1,0 +1,12 @@
+liquid_assets:
+  family: dylan_family
+  name: Liquid assets
+  account_ids:
+    - <%= ActiveRecord::FixtureSet.identify(:depository) %>
+    - <%= ActiveRecord::FixtureSet.identify(:investment) %>
+
+properties_only:
+  family: dylan_family
+  name: Properties only
+  account_ids:
+    - <%= ActiveRecord::FixtureSet.identify(:property) %>

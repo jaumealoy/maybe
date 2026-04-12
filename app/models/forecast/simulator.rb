@@ -2,10 +2,10 @@ class Forecast::Simulator
   Result = Data.define(:accounts, :rows, :chart_series, :window)
   Row = Data.define(:date, :balances, :total_balance, :projected)
 
-  def initialize(family:, account_ids:, window:)
+  def initialize(family:, account_ids:, window:, offset: 0)
     @family = family
     @account_ids = Array(account_ids).compact_blank
-    @window = Forecast::Window.from_key(window)
+    @window = Forecast::Window.from_key(window, offset: offset)
   end
 
   def call
@@ -106,10 +106,17 @@ class Forecast::Simulator
 
     def actual_balance_points_by_account
       @actual_balance_points_by_account ||= accounts.each_with_object({}) do |account, result|
+        actual_period_end = [ window.period.end_date, Date.current ].min
+
+        if actual_period_end < window.period.start_date
+          result[account.id] = {}
+          next
+        end
+
         series = Balance::ChartSeriesBuilder.new(
           account_ids: [ account.id ],
           currency: family.currency,
-          period: Period.custom(start_date: window.period.start_date, end_date: [ window.period.end_date, Date.current ].min),
+          period: Period.custom(start_date: window.period.start_date, end_date: actual_period_end),
           favorable_direction: "up",
           interval: window.interval
         ).balance_series
@@ -123,7 +130,7 @@ class Forecast::Simulator
         account_forecasts.flat_map do |forecast|
           converted_amount = forecast.converted_amount(family.currency).amount
           forecast.occurrence_dates_between(
-            start_date: Date.current,
+            start_date: [ Date.current, window.period.start_date ].min,
             end_date: window.period.end_date,
             from_date: Date.current
           ).map { |occurrence_date| [ occurrence_date, forecast.income? ? converted_amount : -converted_amount ] }

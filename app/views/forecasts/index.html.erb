@@ -16,16 +16,34 @@
 
 <div class="space-y-6 pb-24">
   <section class="bg-container rounded-xl shadow-border-xs p-4 space-y-4">
-    <%= form_with url: forecasts_path, method: :get, class: "grid gap-4 lg:grid-cols-[1fr_auto] items-start" do |form| %>
+    <%= form_with url: forecasts_path, method: :get, class: "grid gap-4" do |form| %>
+      <%= form.hidden_field :offset, value: @window.offset %>
+      <%= hidden_field_tag :account_set_id, @selected_account_set&.id %>
       <div class="grid gap-4 lg:grid-cols-2">
         <div class="space-y-2">
-          <label class="text-sm font-medium text-primary">Accounts</label>
+          <div class="flex items-center justify-between gap-3">
+            <label class="text-sm font-medium text-primary">Accounts</label>
+            <% if @selected_account_set.present? %>
+              <span class="text-xs text-secondary">Using set: <%= @selected_account_set.name %></span>
+            <% end %>
+          </div>
           <%= form.select :account_ids,
                           options_from_collection_for_select(@accounts, :id, :name, @selected_account_ids),
                           {},
                           multiple: true,
                           size: [@accounts.count, 6].min,
                           class: "bg-container border border-secondary rounded-lg px-3 py-2 text-sm text-primary w-full" %>
+
+          <div class="flex flex-wrap gap-2">
+            <% @account_shortcuts.each do |shortcut| %>
+              <%= link_to shortcut[:label],
+                          forecasts_path(window: @window.key, offset: @window.offset, account_ids: shortcut[:account_ids]),
+                          class: class_names(
+                            "rounded-full border border-secondary px-3 py-1 text-xs font-medium",
+                            @selected_account_ids.sort == shortcut[:account_ids].sort ? "bg-surface-inset text-primary" : "text-secondary hover:text-primary"
+                          ) %>
+            <% end %>
+          </div>
         </div>
 
         <div class="space-y-2">
@@ -41,6 +59,46 @@
         <%= render DS::Button.new(text: "Update", type: "submit") %>
       </div>
     <% end %>
+
+    <div class="space-y-3 border-t border-alpha-black-25 pt-4">
+      <div class="flex items-center justify-between gap-3">
+        <p class="text-sm font-medium text-primary">Saved account sets</p>
+        <% if @forecast_account_sets.any? %>
+          <p class="text-xs text-secondary"><%= @forecast_account_sets.count %> saved</p>
+        <% end %>
+      </div>
+
+      <div class="flex flex-wrap gap-2">
+        <% @forecast_account_sets.each do |account_set| %>
+          <div class="inline-flex items-center gap-1 rounded-full border border-secondary px-2 py-1">
+            <%= link_to account_set.name,
+                        forecasts_path(window: @window.key, offset: @window.offset, account_set_id: account_set.id),
+                        class: class_names(
+                          "text-xs font-medium",
+                          @selected_account_set == account_set ? "text-primary" : "text-secondary hover:text-primary"
+                        ) %>
+            <%= button_to forecast_account_set_path(account_set, window: @window.key, offset: @window.offset),
+                          method: :delete,
+                          class: "text-secondary hover:text-destructive",
+                          form_class: "inline-block" do %>
+              <%= icon("x", size: "xs", color: :current) %>
+            <% end %>
+          </div>
+        <% end %>
+      </div>
+
+      <%= styled_form_with model: ForecastAccountSet.new, url: forecast_account_sets_path, class: "grid gap-3 lg:grid-cols-[1fr_auto]", data: { turbo_frame: :_top } do |save_form| %>
+        <%= hidden_field_tag :window, @window.key %>
+        <%= hidden_field_tag :offset, @window.offset %>
+        <% @selected_account_ids.each do |account_id| %>
+          <%= hidden_field_tag "forecast_account_set[account_ids][]", account_id %>
+        <% end %>
+        <%= save_form.text_field :name, label: "Save current selection as", placeholder: "e.g. Liquid assets", required: true %>
+        <div class="flex items-end">
+          <%= render DS::Button.new(text: "Save set", type: "submit") %>
+        </div>
+      <% end %>
+    </div>
   </section>
 
   <section class="bg-container rounded-xl shadow-border-xs p-4 space-y-4">
@@ -48,9 +106,20 @@
       <div>
         <p class="text-sm font-medium text-secondary">Projected balance</p>
         <p class="text-3xl font-medium text-primary"><%= @simulation.rows.last.total_balance.format %></p>
+        <p class="text-sm text-secondary"><%= @window.range_label %></p>
       </div>
 
-      <p class="text-sm text-secondary">Actual through today, forecast after today</p>
+      <div class="flex items-center gap-2">
+        <%= link_to forecasts_path(window: @window.key, offset: @window.offset - 1, account_ids: @selected_account_ids, account_set_id: @selected_account_set&.id),
+                    class: "rounded-lg border border-secondary px-3 py-2 text-sm text-secondary hover:text-primary" do %>
+          <%= icon("chevron-left", size: "sm", color: :current) %>
+        <% end %>
+        <p class="text-sm text-secondary">Actual through today, forecast after today</p>
+        <%= link_to forecasts_path(window: @window.key, offset: @window.offset + 1, account_ids: @selected_account_ids, account_set_id: @selected_account_set&.id),
+                    class: "rounded-lg border border-secondary px-3 py-2 text-sm text-secondary hover:text-primary" do %>
+          <%= icon("chevron-right", size: "sm", color: :current) %>
+        <% end %>
+      </div>
     </div>
 
     <div class="h-72">
@@ -65,7 +134,7 @@
   <section class="bg-container rounded-xl shadow-border-xs p-4 space-y-4 overflow-x-auto">
     <div class="flex items-center justify-between gap-4">
       <h2 class="text-lg font-medium text-primary">Simulation table</h2>
-      <p class="text-sm text-secondary"><%= @window.label %> view</p>
+      <p class="text-sm text-secondary"><%= @window.label %> · <%= @window.range_label %></p>
     </div>
 
     <table class="min-w-full text-sm">

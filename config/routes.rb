@@ -98,6 +98,7 @@ Rails.application.routes.draw do
   resources :forecasts, except: :show do
     post :materialize, on: :member
   end
+  resources :forecast_account_sets, only: %i[create destroy]
 
   resources :family_merchants, only: %i[index new create edit update destroy]
 
