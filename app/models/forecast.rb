@@ -47,7 +47,7 @@ class Forecast < ApplicationRecord
   def occurrence_dates_between(start_date:, end_date:, from_date: Date.current)
     return [] if end_date < start_date
 
-    effective_start = [start_date, from_date].compact.max
+    effective_start = [ start_date, from_date ].compact.max
     effective_end = end_date
     return [] if effective_end < effective_start
 

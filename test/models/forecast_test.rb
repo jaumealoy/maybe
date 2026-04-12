@@ -30,7 +30,7 @@ class ForecastTest < ActiveSupport::TestCase
       occurs_on: Date.current
     )
 
-    assert_difference ["Entry.count", "Forecast::Materialization.count"], 1 do
+    assert_difference [ "Entry.count", "Forecast::Materialization.count" ], 1 do
       entry = forecast.materialize!(occurrence_date: Date.current)
       assert_equal 95, entry.amount.to_i
       assert_equal "Electric bill", entry.name

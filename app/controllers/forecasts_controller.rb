@@ -25,7 +25,7 @@ class ForecastsController < ApplicationController
   end
 
   def create
-    @forecast = Current.family.forecasts.new(forecast_params)
+    @forecast = Current.family.forecasts.new(forecast_params.merge(account: selected_account_for_params))
 
     if @forecast.save
       redirect_to forecasts_path, notice: "Forecast created"
@@ -39,7 +39,7 @@ class ForecastsController < ApplicationController
   end
 
   def update
-    if @forecast.update(forecast_params)
+    if @forecast.update(forecast_params.merge(account: selected_account_for_params))
       redirect_to forecasts_path, notice: "Forecast updated"
     else
       render :edit, status: :unprocessable_entity, layout: false
@@ -86,7 +86,6 @@ class ForecastsController < ApplicationController
     def forecast_params
       params.require(:forecast).permit(
         :name,
-        :account_id,
         :category_id,
         :amount,
         :currency,
@@ -98,5 +97,9 @@ class ForecastsController < ApplicationController
         :ends_on,
         tag_ids: []
       )
+    end
+
+    def selected_account_for_params
+      Current.family.accounts.manual.find(params.require(:forecast).fetch(:account_id))
     end
 end

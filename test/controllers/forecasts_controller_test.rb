@@ -42,7 +42,7 @@ class ForecastsControllerTest < ActionDispatch::IntegrationTest
       occurs_on: Date.current
     )
 
-    assert_difference ["Entry.count", "Forecast::Materialization.count"], 1 do
+    assert_difference [ "Entry.count", "Forecast::Materialization.count" ], 1 do
       post materialize_forecast_url(forecast)
     end
 

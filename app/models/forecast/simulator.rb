@@ -105,7 +105,7 @@ class Forecast::Simulator
     end
 
     def actual_balance_points_by_account
-      @actual_balance_points_by_account ||= accounts.index_with do |account|
+      @actual_balance_points_by_account ||= accounts.each_with_object({}) do |account, result|
         series = Balance::ChartSeriesBuilder.new(
           account_ids: [ account.id ],
           currency: family.currency,
@@ -114,7 +114,7 @@ class Forecast::Simulator
           interval: window.interval
         ).balance_series
 
-        series.values.index_by(&:date).transform_values(&:value)
+        result[account.id] = series.values.index_by(&:date).transform_values(&:value)
       end
     end
 
