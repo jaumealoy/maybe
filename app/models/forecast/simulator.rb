@@ -1,11 +1,11 @@
 class Forecast::Simulator
   Result = Data.define(:accounts, :rows, :chart_series, :window)
-  Row = Data.define(:date, :balances, :total_balance, :projected)
+  Row = Data.define(:date, :balances, :total_balance, :projected, :delta)
 
   def initialize(family:, account_ids:, window:, offset: 0)
     @family = family
     @account_ids = Array(account_ids).compact_blank
-    @window = Forecast::Window.from_key(window, offset: offset)
+    @window = window.is_a?(Forecast::Window) ? window : Forecast::Window.from_key(window, offset: offset)
   end
 
   def call
@@ -31,8 +31,9 @@ class Forecast::Simulator
     def rows
       @rows ||= begin
         previous_balances = nil
+        previous_total_balance = nil
 
-        checkpoint_dates.map do |date|
+        simulation_checkpoint_dates.filter_map do |date|
           balances = if date <= Date.current
             actual_balances_for(date)
           else
@@ -40,13 +41,19 @@ class Forecast::Simulator
           end
 
           previous_balances = balances
+          total_balance = Money.new(balances.values.sum(&:amount), family.currency)
+          next unless visible_checkpoint_dates.include?(date)
 
-          Row.new(
+          row = Row.new(
             date: date,
             balances: balances,
-            total_balance: Money.new(balances.values.sum(&:amount), family.currency),
-            projected: date > Date.current
+            total_balance: total_balance,
+            projected: date > Date.current,
+            delta: previous_total_balance.present? ? Money.new(total_balance.amount - previous_total_balance.amount, family.currency) : nil
           )
+
+          previous_total_balance = total_balance
+          row
         end
       end
     end
@@ -60,29 +67,41 @@ class Forecast::Simulator
       series.as_json.merge(forecast_start_date: Date.current)
     end
 
-    def checkpoint_dates
-      @checkpoint_dates ||= begin
-        period = window.period
+    def visible_checkpoint_dates
+      @visible_checkpoint_dates ||= checkpoint_dates_for(window.period)
+    end
 
-        if window.interval == "1 month"
-          dates = []
-          cursor = period.start_date.beginning_of_month
+    def simulation_checkpoint_dates
+      @simulation_checkpoint_dates ||= checkpoint_dates_for(simulation_period)
+    end
 
-          while cursor <= period.end_date
-            dates << cursor
-            cursor = cursor.next_month.beginning_of_month
-          end
-
-          dates << period.end_date unless dates.last == period.end_date
-          dates.uniq
-        else
-          period.date_range.to_a
-        end
+    def checkpoint_dates_for(period)
+      if window.interval == "1 month"
+        monthly_checkpoint_dates_for(period)
+      else
+        period.date_range.to_a
       end
     end
 
+    def monthly_checkpoint_dates_for(period)
+      dates = []
+      cursor = period.start_date.beginning_of_month
+
+      while cursor <= period.end_date
+        dates << cursor
+        cursor = cursor.next_month.beginning_of_month
+      end
+
+      dates << Date.current if period.start_date <= Date.current && Date.current <= period.end_date
+      dates << period.end_date unless dates.last == period.end_date
+      dates.uniq.sort
+    end
+
     def previous_date_for(date)
-      checkpoint_dates[checkpoint_dates.index(date) - 1]
+      index = simulation_checkpoint_dates.index(date)
+      return if index.blank? || index.zero?
+
+      simulation_checkpoint_dates[index - 1]
     end
 
     def actual_balances_for(date)
@@ -106,9 +125,9 @@ class Forecast::Simulator
 
     def actual_balance_points_by_account
       @actual_balance_points_by_account ||= accounts.each_with_object({}) do |account, result|
-        actual_period_end = [ window.period.end_date, Date.current ].min
+        actual_period_end = [ simulation_period.end_date, Date.current ].min
 
-        if actual_period_end < window.period.start_date
+        if actual_period_end < simulation_period.start_date
           result[account.id] = {}
           next
         end
@@ -116,7 +135,7 @@ class Forecast::Simulator
         series = Balance::ChartSeriesBuilder.new(
           account_ids: [ account.id ],
           currency: family.currency,
-          period: Period.custom(start_date: window.period.start_date, end_date: actual_period_end),
+          period: Period.custom(start_date: simulation_period.start_date, end_date: actual_period_end),
           favorable_direction: "up",
           interval: window.interval
         ).balance_series
@@ -128,12 +147,12 @@ class Forecast::Simulator
     def forecast_amounts_by_account
       @forecast_amounts_by_account ||= forecasts.group_by(&:account_id).transform_values do |account_forecasts|
         account_forecasts.flat_map do |forecast|
-          converted_amount = forecast.converted_amount(family.currency).amount
-          forecast.occurrence_dates_between(
-            start_date: [ Date.current, window.period.start_date ].min,
+          forecast.projection_events_between(
+            target_currency: family.currency,
+            start_date: [ Date.current, simulation_period.start_date ].min,
             end_date: window.period.end_date,
             from_date: Date.current
-          ).map { |occurrence_date| [ occurrence_date, forecast.income? ? converted_amount : -converted_amount ] }
+          )
         end
       end
     end
@@ -152,5 +171,9 @@ class Forecast::Simulator
 
     def filtered_account_ids
       @filtered_account_ids ||= accounts.map(&:id)
+    end
+
+    def simulation_period
+      @simulation_period ||= Period.custom(start_date: [ window.period.start_date, Date.current ].min, end_date: window.period.end_date)
     end
 end

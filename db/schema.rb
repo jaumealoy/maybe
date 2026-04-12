@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.2].define(version: 2026_04_12_100600) do
+ActiveRecord::Schema[7.2].define(version: 2026_04_12_103130) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pgcrypto"
   enable_extension "plpgsql"
@@ -314,6 +314,7 @@ ActiveRecord::Schema[7.2].define(version: 2026_04_12_100600) do
     t.date "ends_on"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.boolean "spread_across_month", default: false, null: false
     t.index ["account_id"], name: "index_forecasts_on_account_id"
     t.index ["category_id"], name: "index_forecasts_on_category_id"
     t.index ["family_id", "account_id"], name: "index_forecasts_on_family_id_and_account_id"

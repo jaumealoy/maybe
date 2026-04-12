@@ -17,7 +17,9 @@
 <div class="space-y-6 pb-24">
   <section class="bg-container rounded-xl shadow-border-xs p-4 space-y-4">
     <%= form_with url: forecasts_path, method: :get, class: "grid gap-4" do |form| %>
-      <%= form.hidden_field :offset, value: @window.offset %>
+      <% unless @window.custom? %>
+        <%= form.hidden_field :offset, value: @window.offset %>
+      <% end %>
       <%= hidden_field_tag :account_set_id, @selected_account_set&.id %>
       <div class="grid gap-4 lg:grid-cols-2">
         <div class="space-y-2">
@@ -37,7 +39,15 @@
           <div class="flex flex-wrap gap-2">
             <% @account_shortcuts.each do |shortcut| %>
               <%= link_to shortcut[:label],
-                          forecasts_path(window: @window.key, offset: @window.offset, account_ids: shortcut[:account_ids]),
+                          forecasts_path(
+                            {
+                              window: @window.key,
+                              offset: @window.offset,
+                              start_date: @window.start_date_value,
+                              end_date: @window.end_date_value,
+                              account_ids: shortcut[:account_ids]
+                            }.compact
+                          ),
                           class: class_names(
                             "rounded-full border border-secondary px-3 py-1 text-xs font-medium",
                             @selected_account_ids.sort == shortcut[:account_ids].sort ? "bg-surface-inset text-primary" : "text-secondary hover:text-primary"
@@ -52,6 +62,14 @@
                           Forecast::Window.as_options,
                           { selected: @window.key },
                           class: "bg-container border border-secondary rounded-lg px-3 py-2 text-sm text-primary w-full" %>
+          <div class="grid gap-2 sm:grid-cols-2">
+            <%= form.date_field :start_date,
+                                value: @window.start_date_value,
+                                class: "bg-container border border-secondary rounded-lg px-3 py-2 text-sm text-primary w-full" %>
+            <%= form.date_field :end_date,
+                                value: @window.end_date_value,
+                                class: "bg-container border border-secondary rounded-lg px-3 py-2 text-sm text-primary w-full" %>
+          </div>
         </div>
       </div>
 
@@ -72,12 +90,20 @@
         <% @forecast_account_sets.each do |account_set| %>
           <div class="inline-flex items-center gap-1 rounded-full border border-secondary px-2 py-1">
             <%= link_to account_set.name,
-                        forecasts_path(window: @window.key, offset: @window.offset, account_set_id: account_set.id),
+                        forecasts_path(
+                          {
+                            window: @window.key,
+                            offset: @window.offset,
+                            start_date: @window.start_date_value,
+                            end_date: @window.end_date_value,
+                            account_set_id: account_set.id
+                          }.compact
+                        ),
                         class: class_names(
                           "text-xs font-medium",
                           @selected_account_set == account_set ? "text-primary" : "text-secondary hover:text-primary"
                         ) %>
-            <%= button_to forecast_account_set_path(account_set, window: @window.key, offset: @window.offset),
+            <%= button_to forecast_account_set_path(account_set, window: @window.key, offset: @window.offset, start_date: @window.start_date_value, end_date: @window.end_date_value),
                           method: :delete,
                           class: "text-secondary hover:text-destructive",
                           form_class: "inline-block" do %>
@@ -90,6 +116,8 @@
       <%= styled_form_with model: ForecastAccountSet.new, url: forecast_account_sets_path, class: "grid gap-3 lg:grid-cols-[1fr_auto]", data: { turbo_frame: :_top } do |save_form| %>
         <%= hidden_field_tag :window, @window.key %>
         <%= hidden_field_tag :offset, @window.offset %>
+        <%= hidden_field_tag :start_date, @window.start_date_value %>
+        <%= hidden_field_tag :end_date, @window.end_date_value %>
         <% @selected_account_ids.each do |account_id| %>
           <%= hidden_field_tag "forecast_account_set[account_ids][]", account_id %>
         <% end %>
@@ -110,12 +138,12 @@
       </div>
 
       <div class="flex items-center gap-2">
-        <%= link_to forecasts_path(window: @window.key, offset: @window.offset - 1, account_ids: @selected_account_ids, account_set_id: @selected_account_set&.id),
+        <%= link_to forecasts_path(@window.previous_params.merge(account_ids: @selected_account_ids, account_set_id: @selected_account_set&.id)),
                     class: "rounded-lg border border-secondary px-3 py-2 text-sm text-secondary hover:text-primary" do %>
           <%= icon("chevron-left", size: "sm", color: :current) %>
         <% end %>
         <p class="text-sm text-secondary">Actual through today, forecast after today</p>
-        <%= link_to forecasts_path(window: @window.key, offset: @window.offset + 1, account_ids: @selected_account_ids, account_set_id: @selected_account_set&.id),
+        <%= link_to forecasts_path(@window.next_params.merge(account_ids: @selected_account_ids, account_set_id: @selected_account_set&.id)),
                     class: "rounded-lg border border-secondary px-3 py-2 text-sm text-secondary hover:text-primary" do %>
           <%= icon("chevron-right", size: "sm", color: :current) %>
         <% end %>
@@ -145,6 +173,7 @@
             <th class="py-2 pr-4 font-medium"><%= account.name %></th>
           <% end %>
           <th class="py-2 pr-4 font-medium">Total</th>
+          <th class="py-2 pr-4 font-medium">Delta</th>
         </tr>
       </thead>
       <tbody>
@@ -160,6 +189,9 @@
               <td class="py-2 pr-4 text-primary whitespace-nowrap"><%= row.balances.fetch(account).format %></td>
             <% end %>
             <td class="py-2 pr-4 text-primary font-medium whitespace-nowrap"><%= row.total_balance.format %></td>
+            <td class="py-2 pr-4 font-medium whitespace-nowrap <%= row.delta&.amount&.positive? ? "text-success" : row.delta&.amount&.negative? ? "text-destructive" : "text-secondary" %>">
+              <%= row.delta.present? ? row.delta.format : "—" %>
+            </td>
           </tr>
         <% end %>
       </tbody>

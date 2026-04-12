@@ -18,6 +18,24 @@ class ForecastsControllerTest < ActionDispatch::IntegrationTest
     assert_match Date.current.next_month.strftime("%B %Y"), response.body
   end
 
+
+  test "should show custom date range" do
+    start_date = Date.current.next_month.beginning_of_month
+    end_date = start_date + 6.days
+
+    get forecasts_url, params: { start_date: start_date.iso8601, end_date: end_date.iso8601 }
+
+    assert_response :success
+    assert_match start_date.strftime("%Y-%m-%d"), response.body
+    assert_match end_date.strftime("%Y-%m-%d"), response.body
+  end
+
+  test "should render delta column in the simulation table" do
+    get forecasts_url
+
+    assert_response :success
+    assert_match ">Delta<", response.body
+  end
   test "should use saved account set" do
     get forecasts_url, params: { account_set_id: forecast_account_sets(:liquid_assets).id }
 

@@ -17,6 +17,13 @@
     <%= form.select :currency, Current.family.accounts.manual.visible.distinct.pluck(:currency).presence || [ Current.family.currency ], { label: "Currency" }, required: true %>
     <%= form.select :kind, [["Expense", "expense"], ["Income", "income"]], { label: "Type" }, required: true %>
     <%= form.select :schedule, [["Monthly", "monthly"], ["One time", "one_time"]], { label: "Schedule" }, required: true %>
+    <div class="flex items-center justify-between rounded-lg border border-secondary px-3 py-2">
+      <div>
+        <p class="text-sm font-medium text-primary">Spread across month</p>
+        <p class="text-xs text-secondary">Distribute the forecast evenly across the active days in each month.</p>
+      </div>
+      <%= form.toggle :spread_across_month %>
+    </div>
     <%= form.date_field :occurs_on, label: "One-time date" %>
     <%= form.number_field :day_of_month, label: "Day of month", min: 1, max: 31 %>
     <%= form.date_field :starts_on, label: "Start date" %>

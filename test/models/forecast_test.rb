@@ -5,6 +5,22 @@ class ForecastTest < ActiveSupport::TestCase
     @forecast = forecasts(:monthly_rent)
   end
 
+  test "spread monthly forecasts do not require a day of month" do
+    forecast = Forecast.new(
+      family: families(:dylan_family),
+      account: accounts(:depository),
+      name: "Distributed rent",
+      amount: 100,
+      currency: "USD",
+      kind: "expense",
+      schedule: "monthly",
+      spread_across_month: true
+    )
+
+    assert_predicate forecast, :valid?
+    assert_equal "Monthly throughout month", forecast.schedule_label
+  end
+
   test "monthly occurrence dates ignore already materialized dates and the past" do
     @forecast.materializations.create!(entry: entries(:transaction), occurrence_date: Date.current)
 

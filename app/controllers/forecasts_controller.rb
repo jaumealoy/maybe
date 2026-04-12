@@ -12,12 +12,16 @@ class ForecastsController < ApplicationController
   def index
     @selected_account_set = selected_account_set
     @selected_account_ids = selected_account_ids
-    @window = Forecast::Window.from_key(params[:window], offset: params[:offset])
+    @window = Forecast::Window.from_params(
+      key: params[:window],
+      offset: params[:offset],
+      start_date: params[:start_date],
+      end_date: params[:end_date]
+    )
     @simulation = Forecast::Simulator.new(
       family: Current.family,
       account_ids: @selected_account_ids,
-      window: @window.key,
-      offset: @window.offset
+      window: @window
     ).call
     @forecast_account_sets = Current.family.forecast_account_sets.alphabetically
     @account_shortcuts = build_account_shortcuts
@@ -126,6 +130,7 @@ class ForecastsController < ApplicationController
         :currency,
         :kind,
         :schedule,
+        :spread_across_month,
         :occurs_on,
         :day_of_month,
         :starts_on,
