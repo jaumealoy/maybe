@@ -139,7 +139,7 @@ class Forecast::Simulator
     end
 
     def forecasts
-      @forecasts ||= family.forecasts.includes(:materializations).for_accounts(accounts.map(&:id)).to_a
+      @forecasts ||= family.forecasts.includes(:materializations).for_accounts(filtered_account_ids).to_a
     end
 
     def fallback_current_balance_for(account)
@@ -148,5 +148,9 @@ class Forecast::Simulator
 
     def latest_exchange_rate_for(source_currency)
       ExchangeRate.latest_rate(from_currency: source_currency, to_currency: family.currency)
+    end
+
+    def filtered_account_ids
+      @filtered_account_ids ||= accounts.map(&:id)
     end
 end

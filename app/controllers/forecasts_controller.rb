@@ -135,6 +135,6 @@ class ForecastsController < ApplicationController
     end
 
     def selected_account_for_params
-      Current.family.accounts.manual.find(params.require(:forecast).fetch(:account_id))
+      Current.family.accounts.manual.find(params.fetch(:account_id))
     end
 end

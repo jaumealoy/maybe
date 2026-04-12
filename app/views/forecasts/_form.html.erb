@@ -5,7 +5,14 @@
 
   <section class="space-y-4">
     <%= form.text_field :name, label: "Name", required: true, autofocus: true %>
-    <%= form.collection_select :account_id, @accounts, :id, :name, { label: "Account" }, required: true %>
+    <div class="space-y-2">
+      <%= label_tag :account_id, "Account", class: "form-field__label" %>
+      <%= select_tag :account_id,
+                     options_from_collection_for_select(@accounts, :id, :name, forecast.account_id),
+                     prompt: "Select an account",
+                     required: true,
+                     class: "form-field__input" %>
+    </div>
     <%= form.money_field :amount, label: "Amount", required: true %>
     <%= form.select :currency, Current.family.accounts.manual.visible.distinct.pluck(:currency).presence || [ Current.family.currency ], { label: "Currency" }, required: true %>
     <%= form.select :kind, [["Expense", "expense"], ["Income", "income"]], { label: "Type" }, required: true %>

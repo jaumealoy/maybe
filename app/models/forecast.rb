@@ -189,7 +189,11 @@ class Forecast < ApplicationRecord
     end
 
     def materialized_dates
-      @materialized_dates ||= materializations.pluck(:occurrence_date)
+      @materialized_dates ||= if materializations.loaded?
+        materializations.map(&:occurrence_date)
+      else
+        materializations.pluck(:occurrence_date)
+      end
     end
 
     def latest_exchange_rate_for(target_currency)

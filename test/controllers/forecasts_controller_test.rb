@@ -57,9 +57,9 @@ class ForecastsControllerTest < ActionDispatch::IntegrationTest
   test "should create forecast" do
     assert_difference("Forecast.count") do
       post forecasts_url, params: {
+        account_id: accounts(:depository).id,
         forecast: {
           name: "Bonus",
-          account_id: accounts(:depository).id,
           amount: 250,
           currency: "USD",
           kind: "income",
