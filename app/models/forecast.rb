@@ -193,8 +193,6 @@ class Forecast < ApplicationRecord
     end
 
     def latest_exchange_rate_for(target_currency)
-      return 1 if currency == target_currency
-
-      ExchangeRate.where(from_currency: currency, to_currency: target_currency).order(date: :desc).pick(:rate) || 1
+      ExchangeRate.latest_rate(from_currency: currency, to_currency: target_currency)
     end
 end

@@ -147,8 +147,6 @@ class Forecast::Simulator
     end
 
     def latest_exchange_rate_for(source_currency)
-      return 1 if source_currency == family.currency
-
-      ExchangeRate.where(from_currency: source_currency, to_currency: family.currency).order(date: :desc).pick(:rate) || 1
+      ExchangeRate.latest_rate(from_currency: source_currency, to_currency: family.currency)
     end
 end

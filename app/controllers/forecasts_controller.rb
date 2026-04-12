@@ -1,4 +1,5 @@
 class ForecastsController < ApplicationController
+  DEFAULT_SORT_DATE = Date.new(9999, 12, 31)
   before_action :set_accounts
   before_action :set_forecast, only: %i[edit update destroy materialize]
 
@@ -25,7 +26,7 @@ class ForecastsController < ApplicationController
       .for_accounts(@selected_account_ids.presence || @accounts.map(&:id))
       .alphabetically
       .to_a
-      .sort_by { |forecast| [ forecast.next_occurrence_date || Date.new(9999, 12, 31), forecast.name ] }
+      .sort_by { |forecast| [ forecast.next_occurrence_date || DEFAULT_SORT_DATE, forecast.name ] }
 
     @breadcrumbs = [ [ "Forecast", nil ] ]
   end
