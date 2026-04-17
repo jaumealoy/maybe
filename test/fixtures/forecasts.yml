@@ -1,0 +1,22 @@
+monthly_rent:
+  family: dylan_family
+  account: depository
+  category: food_and_drink
+  name: Monthly rent
+  amount: 1200
+  currency: USD
+  kind: expense
+  schedule: monthly
+  day_of_month: <%= Date.current.day %>
+  starts_on: <%= Date.current.beginning_of_month %>
+
+salary_bonus:
+  family: dylan_family
+  account: depository
+  category: income
+  name: Salary bonus
+  amount: 500
+  currency: USD
+  kind: income
+  schedule: one_time
+  occurs_on: <%= 5.days.from_now.to_date %>

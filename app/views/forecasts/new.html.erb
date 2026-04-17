@@ -1,0 +1,8 @@
+<%= turbo_frame_tag "modal" do %>
+  <%= render DS::Dialog.new do |dialog| %>
+    <% dialog.with_header(title: "New forecast") %>
+    <% dialog.with_body do %>
+      <%= render "form", forecast: @forecast %>
+    <% end %>
+  <% end %>
+<% end %>

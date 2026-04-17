@@ -107,7 +107,9 @@ export default class extends Controller {
 
     if (this.useLabelsValue) {
       this._drawXAxisLabels();
-      this._drawGradientBelowTrendline();
+      if (!this._hasForecastSplit) {
+        this._drawGradientBelowTrendline();
+      }
     }
 
     if (this.useTooltipValue) {
@@ -117,6 +119,11 @@ export default class extends Controller {
   }
 
   _drawTrendline() {
+    if (this._hasForecastSplit) {
+      this._drawSplitTrendline();
+      return;
+    }
+
     this._installTrendlineSplit();
 
     this._d3Group
@@ -124,6 +131,29 @@ export default class extends Controller {
       .datum(this._normalDataPoints)
       .attr("fill", "none")
       .attr("stroke", `url(#${this.element.id}-split-gradient)`)
+      .attr("d", this._d3Line)
+      .attr("stroke-linejoin", "round")
+      .attr("stroke-linecap", "round")
+      .attr("stroke-width", this.strokeWidthValue);
+  }
+
+  _drawSplitTrendline() {
+    this._d3Group
+      .append("path")
+      .datum(this._actualDataPoints)
+      .attr("fill", "none")
+      .attr("stroke", this._trendColor)
+      .attr("d", this._d3Line)
+      .attr("stroke-linejoin", "round")
+      .attr("stroke-linecap", "round")
+      .attr("stroke-width", this.strokeWidthValue);
+
+    this._d3Group
+      .append("path")
+      .datum(this._forecastDataPoints)
+      .attr("fill", "none")
+      .attr("stroke", "var(--color-gray-400)")
+      .attr("stroke-dasharray", "6, 6")
       .attr("d", this._d3Line)
       .attr("stroke-linejoin", "round")
       .attr("stroke-linecap", "round")
@@ -313,7 +343,9 @@ export default class extends Controller {
             : d0;
         const xPercent = this._d3XScale(d.date) / this._d3ContainerWidth;
 
-        this._setTrendlineSplitAt(xPercent);
+        if (!this._hasForecastSplit) {
+          this._setTrendlineSplitAt(xPercent);
+        }
 
         // Reset
         this._d3Group.selectAll(".data-point-circle").remove();
@@ -367,7 +399,9 @@ export default class extends Controller {
           this._d3Group.selectAll(".guideline").remove();
           this._d3Group.selectAll(".data-point-circle").remove();
           this._d3Tooltip.style("opacity", 0);
-          this._setTrendlineSplitAt(1);
+          if (!this._hasForecastSplit) {
+            this._setTrendlineSplitAt(1);
+          }
         }
       });
   }
@@ -491,6 +525,34 @@ export default class extends Controller {
 
   get _trendColor() {
     return this.dataValue.trend.color;
+  }
+
+  get _forecastStartDate() {
+    if (!this.dataValue.forecast_start_date) {
+      return null;
+    }
+
+    return parseLocalDate(this.dataValue.forecast_start_date);
+  }
+
+  get _hasForecastSplit() {
+    return this._actualDataPoints.length > 1 && this._forecastDataPoints.length > 1;
+  }
+
+  get _actualDataPoints() {
+    if (!this._forecastStartDate) {
+      return this._normalDataPoints;
+    }
+
+    return this._normalDataPoints.filter((point) => point.date <= this._forecastStartDate);
+  }
+
+  get _forecastDataPoints() {
+    if (!this._forecastStartDate) {
+      return [];
+    }
+
+    return this._normalDataPoints.filter((point) => point.date >= this._forecastStartDate);
   }
 
   get _d3Line() {

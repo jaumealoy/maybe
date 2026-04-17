@@ -1,0 +1,266 @@
+<% content_for :page_header do %>
+  <div class="mb-6 flex items-center justify-between gap-4">
+    <div class="space-y-1">
+      <h1 class="text-xl lg:text-3xl font-medium text-primary">Forecast</h1>
+      <p class="text-sm lg:text-base text-secondary">Plan upcoming income and expenses across your manual accounts.</p>
+    </div>
+
+    <%= render DS::Link.new(
+      icon: "plus",
+      text: "New forecast",
+      href: new_forecast_path,
+      frame: :modal
+    ) %>
+  </div>
+<% end %>
+
+<div class="space-y-6 pb-24">
+  <section class="bg-container rounded-xl shadow-border-xs p-4 space-y-4">
+    <%= form_with url: forecasts_path, method: :get, class: "grid gap-4" do |form| %>
+      <% unless @window.custom? %>
+        <%= form.hidden_field :offset, value: @window.offset %>
+      <% end %>
+      <%= hidden_field_tag :account_set_id, @selected_account_set&.id %>
+      <div class="grid gap-4 lg:grid-cols-2">
+        <div class="space-y-2">
+          <div class="flex items-center justify-between gap-3">
+            <label class="text-sm font-medium text-primary">Accounts</label>
+            <% if @selected_account_set.present? %>
+              <span class="text-xs text-secondary">Using set: <%= @selected_account_set.name %></span>
+            <% end %>
+          </div>
+          <%= form.select :account_ids,
+                          options_from_collection_for_select(@accounts, :id, :name, @selected_account_ids),
+                          {},
+                          multiple: true,
+                          size: [@accounts.count, 6].min,
+                          class: "bg-container border border-secondary rounded-lg px-3 py-2 text-sm text-primary w-full" %>
+
+          <div class="flex flex-wrap gap-2">
+            <% @account_shortcuts.each do |shortcut| %>
+              <%= link_to shortcut[:label],
+                          forecasts_path(
+                            {
+                              window: @window.key,
+                              offset: @window.offset,
+                              start_date: @window.start_date_value,
+                              end_date: @window.end_date_value,
+                              account_ids: shortcut[:account_ids]
+                            }.compact
+                          ),
+                          class: class_names(
+                            "rounded-full border border-secondary px-3 py-1 text-xs font-medium",
+                            @selected_account_ids.sort == shortcut[:account_ids].sort ? "bg-surface-inset text-primary" : "text-secondary hover:text-primary"
+                          ) %>
+            <% end %>
+          </div>
+        </div>
+
+        <div class="space-y-2">
+          <label class="text-sm font-medium text-primary">Window</label>
+          <%= form.select :window,
+                          Forecast::Window.as_options,
+                          { selected: @window.key },
+                          class: "bg-container border border-secondary rounded-lg px-3 py-2 text-sm text-primary w-full" %>
+          <div class="grid gap-2 sm:grid-cols-2">
+            <%= form.date_field :start_date,
+                                value: @window.start_date_value,
+                                class: "bg-container border border-secondary rounded-lg px-3 py-2 text-sm text-primary w-full" %>
+            <%= form.date_field :end_date,
+                                value: @window.end_date_value,
+                                class: "bg-container border border-secondary rounded-lg px-3 py-2 text-sm text-primary w-full" %>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex items-end">
+        <%= render DS::Button.new(text: "Update", type: "submit") %>
+      </div>
+    <% end %>
+
+    <div class="space-y-3 border-t border-alpha-black-25 pt-4">
+      <div class="flex items-center justify-between gap-3">
+        <p class="text-sm font-medium text-primary">Saved account sets</p>
+        <% if @forecast_account_sets.any? %>
+          <p class="text-xs text-secondary"><%= @forecast_account_sets.count %> saved</p>
+        <% end %>
+      </div>
+
+      <div class="flex flex-wrap gap-2">
+        <% @forecast_account_sets.each do |account_set| %>
+          <div class="inline-flex items-center gap-1 rounded-full border border-secondary px-2 py-1">
+            <%= link_to account_set.name,
+                        forecasts_path(
+                          {
+                            window: @window.key,
+                            offset: @window.offset,
+                            start_date: @window.start_date_value,
+                            end_date: @window.end_date_value,
+                            account_set_id: account_set.id
+                          }.compact
+                        ),
+                        class: class_names(
+                          "text-xs font-medium",
+                          @selected_account_set == account_set ? "text-primary" : "text-secondary hover:text-primary"
+                        ) %>
+            <%= button_to forecast_account_set_path(account_set, window: @window.key, offset: @window.offset, start_date: @window.start_date_value, end_date: @window.end_date_value),
+                          method: :delete,
+                          class: "text-secondary hover:text-destructive",
+                          form_class: "inline-block" do %>
+              <%= icon("x", size: "xs", color: :current) %>
+            <% end %>
+          </div>
+        <% end %>
+      </div>
+
+      <%= styled_form_with model: ForecastAccountSet.new, url: forecast_account_sets_path, class: "grid gap-3 lg:grid-cols-[1fr_auto]", data: { turbo_frame: :_top } do |save_form| %>
+        <%= hidden_field_tag :window, @window.key %>
+        <%= hidden_field_tag :offset, @window.offset %>
+        <%= hidden_field_tag :start_date, @window.start_date_value %>
+        <%= hidden_field_tag :end_date, @window.end_date_value %>
+        <% @selected_account_ids.each do |account_id| %>
+          <%= hidden_field_tag "forecast_account_set[account_ids][]", account_id %>
+        <% end %>
+        <%= save_form.text_field :name, label: "Save current selection as", placeholder: "e.g. Liquid assets", required: true %>
+        <div class="flex items-end">
+          <%= render DS::Button.new(text: "Save set", type: "submit") %>
+        </div>
+      <% end %>
+    </div>
+  </section>
+
+  <section class="bg-container rounded-xl shadow-border-xs p-4 space-y-4">
+    <div class="flex items-center justify-between gap-4">
+      <div>
+        <p class="text-sm font-medium text-secondary">Projected balance</p>
+        <p class="text-3xl font-medium text-primary"><%= @simulation.rows.last.total_balance.format %></p>
+        <p class="text-sm text-secondary"><%= @window.range_label %></p>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <%= link_to forecasts_path(@window.previous_params.merge(account_ids: @selected_account_ids, account_set_id: @selected_account_set&.id)),
+                    class: "rounded-lg border border-secondary px-3 py-2 text-sm text-secondary hover:text-primary" do %>
+          <%= icon("chevron-left", size: "sm", color: :current) %>
+        <% end %>
+        <p class="text-sm text-secondary">Actual through today, forecast after today</p>
+        <%= link_to forecasts_path(@window.next_params.merge(account_ids: @selected_account_ids, account_set_id: @selected_account_set&.id)),
+                    class: "rounded-lg border border-secondary px-3 py-2 text-sm text-secondary hover:text-primary" do %>
+          <%= icon("chevron-right", size: "sm", color: :current) %>
+        <% end %>
+      </div>
+    </div>
+
+    <div class="h-72">
+      <div
+        id="forecastChart"
+        class="w-full h-full"
+        data-controller="time-series-chart"
+        data-time-series-chart-data-value="<%= @simulation.chart_series.to_json %>"></div>
+    </div>
+  </section>
+
+  <section class="bg-container rounded-xl shadow-border-xs p-4 space-y-4 overflow-x-auto">
+    <div class="flex items-center justify-between gap-4">
+      <h2 class="text-lg font-medium text-primary">Simulation table</h2>
+      <p class="text-sm text-secondary"><%= @window.label %> · <%= @window.range_label %></p>
+    </div>
+
+    <table class="min-w-full text-sm">
+      <thead>
+        <tr class="text-left text-secondary border-b border-secondary">
+          <th class="py-2 pr-4 font-medium">Date</th>
+          <% @simulation.accounts.each do |account| %>
+            <th class="py-2 pr-4 font-medium"><%= account.name %></th>
+          <% end %>
+          <th class="py-2 pr-4 font-medium">Total</th>
+          <th class="py-2 pr-4 font-medium">Delta</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% @simulation.rows.each do |row| %>
+          <tr class="border-b border-alpha-black-25 <%= "bg-surface-inset" if row.projected %>">
+            <td class="py-2 pr-4 text-primary whitespace-nowrap">
+              <%= format_date(row.date) %>
+              <% if row.projected %>
+                <span class="ml-2 text-xs text-secondary">Forecast</span>
+              <% end %>
+            </td>
+            <% @simulation.accounts.each do |account| %>
+              <td class="py-2 pr-4 text-primary whitespace-nowrap"><%= row.balances.fetch(account).format %></td>
+            <% end %>
+            <td class="py-2 pr-4 text-primary font-medium whitespace-nowrap"><%= row.total_balance.format %></td>
+            <td class="py-2 pr-4 font-medium whitespace-nowrap <%= row.delta&.amount&.positive? ? "text-success" : row.delta&.amount&.negative? ? "text-destructive" : "text-secondary" %>">
+              <%= row.delta.present? ? row.delta.format : "—" %>
+            </td>
+          </tr>
+        <% end %>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="space-y-4">
+    <div class="flex items-center justify-between gap-4">
+      <h2 class="text-lg font-medium text-primary">Saved forecasts</h2>
+      <p class="text-sm text-secondary"><%= @forecasts.count %> total</p>
+    </div>
+
+    <% if @forecasts.any? %>
+      <div class="grid gap-4">
+        <% @forecasts.each do |forecast| %>
+          <div class="bg-container rounded-xl shadow-border-xs p-4 space-y-3">
+            <div class="flex items-start justify-between gap-4">
+              <div>
+                <p class="text-base font-medium text-primary"><%= forecast.name %></p>
+                <p class="text-sm text-secondary"><%= forecast.account.name %> · <%= forecast.schedule_label %></p>
+              </div>
+
+              <div class="flex items-center gap-2">
+                <%= link_to edit_forecast_path(forecast), data: { turbo_frame: :modal }, class: "text-secondary hover:text-primary" do %>
+                  <%= icon("pencil", color: :current) %>
+                <% end %>
+                <%= button_to forecast_path(forecast), method: :delete, class: "text-secondary hover:text-destructive", form_class: "inline-block" do %>
+                  <%= icon("trash-2", color: :current) %>
+                <% end %>
+              </div>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2 text-sm text-secondary">
+              <span><%= forecast.amount_money.format %></span>
+              <span>·</span>
+              <span><%= forecast.kind.humanize %></span>
+              <% if forecast.category.present? %>
+                <span>·</span>
+                <span><%= forecast.category.name %></span>
+              <% end %>
+              <% if forecast.tags.present? %>
+                <span>·</span>
+                <span><%= forecast.tags.map(&:name).join(", ") %></span>
+              <% end %>
+            </div>
+
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <div class="text-sm text-secondary">
+                <% if (next_date = forecast.next_occurrence_date) %>
+                  Next occurrence: <span class="text-primary"><%= format_date(next_date) %></span>
+                <% else %>
+                  No upcoming occurrence in range
+                <% end %>
+              </div>
+
+              <% if (due_date = forecast.materializable_occurrence_date) %>
+                <%= button_to materialize_forecast_path(forecast), method: :post, class: "inline-flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-inverse" do %>
+                  <%= icon("banknote", color: :white) %>
+                  Materialize <%= format_date(due_date) %>
+                <% end %>
+              <% end %>
+            </div>
+          </div>
+        <% end %>
+      </div>
+    <% else %>
+      <div class="bg-container rounded-xl shadow-border-xs p-6 text-sm text-secondary">
+        No forecasts yet. Create one to start projecting your balances.
+      </div>
+    <% end %>
+  </section>
+</div>
