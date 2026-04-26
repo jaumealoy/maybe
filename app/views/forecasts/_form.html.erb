@@ -10,23 +10,29 @@
       <%= select_tag :account_id,
                      options_from_collection_for_select(@accounts, :id, :name, forecast.account_id),
                      prompt: "Select an account",
-                     required: true,
-                     class: "form-field__input" %>
+                      required: true,
+                      class: "form-field__input" %>
     </div>
-    <%= form.money_field :amount, label: "Amount", required: true %>
+    <%= form.select :value_strategy,
+                    [["Fixed amount", "fixed_amount"], ["Annual % of account balance", "percentage_of_balance"]],
+                    { label: "Calculation" },
+                    required: true %>
+    <%= form.money_field :amount, label: "Fixed amount" %>
+    <%= form.number_field :annual_rate, label: "Annual account yield (%)", min: 0, step: 0.01 %>
+    <%= form.number_field :annual_increase_rate, label: "Annual increase (%)", min: 0, step: 0.01 %>
     <%= form.select :currency, Current.family.accounts.manual.visible.distinct.pluck(:currency).presence || [ Current.family.currency ], { label: "Currency" }, required: true %>
     <%= form.select :kind, [["Expense", "expense"], ["Income", "income"]], { label: "Type" }, required: true %>
-    <%= form.select :schedule, [["Monthly", "monthly"], ["One time", "one_time"]], { label: "Schedule" }, required: true %>
+    <%= form.select :schedule, [["Monthly", "monthly"], ["Yearly", "yearly"], ["One time", "one_time"]], { label: "Schedule" }, required: true %>
     <% spread_label_id = form.field_id(:spread_across_month, :label) %>
     <% spread_description_id = form.field_id(:spread_across_month, :description) %>
     <div class="flex items-center justify-between rounded-lg border border-secondary px-3 py-2">
       <div>
         <label id="<%= spread_label_id %>" for="<%= form.field_id(:spread_across_month) %>" class="text-sm font-medium text-primary">Spread across month</label>
-        <p id="<%= spread_description_id %>" class="text-xs text-secondary">Distribute the forecast evenly across the active days in each month.</p>
+        <p id="<%= spread_description_id %>" class="text-xs text-secondary">Only available for fixed monthly forecasts. Distribute the forecast evenly across the active days in each month.</p>
       </div>
       <%= form.toggle :spread_across_month, aria: { labelledby: spread_label_id, describedby: spread_description_id } %>
     </div>
-    <%= form.date_field :occurs_on, label: "One-time date" %>
+    <%= form.date_field :occurs_on, label: "Occurs on" %>
     <%= form.number_field :day_of_month, label: "Day of month", min: 1, max: 31 %>
     <%= form.date_field :starts_on, label: "Start date" %>
     <%= form.date_field :ends_on, label: "End date" %>

@@ -3,6 +3,8 @@ class Forecast < ApplicationRecord
 
   monetize :amount
 
+  attribute :value_strategy, :string, default: "fixed_amount"
+
   belongs_to :family
   belongs_to :account
   belongs_to :category, optional: true
@@ -12,7 +14,8 @@ class Forecast < ApplicationRecord
   has_many :materializations, class_name: "Forecast::Materialization", dependent: :destroy
 
   enum :kind, { income: "income", expense: "expense" }, validate: true
-  enum :schedule, { one_time: "one_time", monthly: "monthly" }, validate: true
+  enum :schedule, { one_time: "one_time", monthly: "monthly", yearly: "yearly" }, validate: true
+  enum :value_strategy, { fixed_amount: "fixed_amount", percentage_of_balance: "percentage_of_balance" }, validate: true
 
   scope :alphabetically, -> { order(:name) }
   scope :for_accounts, ->(account_ids) {
@@ -21,27 +24,47 @@ class Forecast < ApplicationRecord
     where(account_id: account_ids)
   }
 
-  validates :name, :amount, :currency, :kind, :schedule, presence: true
-  validates :amount, numericality: { greater_than: 0 }
+  validates :name, :currency, :kind, :schedule, :value_strategy, presence: true
+  validates :amount, presence: true, numericality: { greater_than: 0 }, if: :fixed_amount?
+  validates :annual_rate, presence: true, numericality: { greater_than: 0 }, if: :percentage_of_balance?
+  validates :annual_increase_rate, numericality: { greater_than_or_equal_to: 0 }, allow_nil: true
   validates :day_of_month, inclusion: { in: 1..31 }, if: -> { monthly? && !spread_across_month? }
-  validates :occurs_on, presence: true, if: :one_time?
+  validates :occurs_on, presence: true, if: -> { one_time? || yearly? }
   validate :date_range_is_valid
   validate :account_belongs_to_family
   validate :category_belongs_to_family
   validate :account_supports_manual_entries
+  validate :percentage_of_balance_settings_are_valid
+  validate :spread_across_month_settings_are_valid
 
   before_validation :assign_family_from_account
 
-  def signed_projection_amount
-    income? ? amount : -amount
+  def signed_projection_amount(target_currency:, occurrence_date:, balance_amount: nil)
+    projected_amount = projection_amount(
+      target_currency: target_currency,
+      occurrence_date: occurrence_date,
+      balance_amount: balance_amount
+    )
+
+    income? ? projected_amount : -projected_amount
   end
 
-  def entry_amount
-    income? ? -amount : amount
+  def entry_amount(occurrence_date: Date.current, balance_amount: nil)
+    projected_amount = projection_amount(
+      target_currency: currency,
+      occurrence_date: occurrence_date,
+      balance_amount: balance_amount
+    )
+
+    income? ? -projected_amount : projected_amount
   end
 
-  def converted_amount(target_currency)
-    amount_money.exchange_to(target_currency, fallback_rate: latest_exchange_rate_for(target_currency))
+  def converted_amount(target_currency, occurrence_date: Date.current)
+    amount_money.exchange_to(
+      target_currency,
+      date: occurrence_date,
+      fallback_rate: latest_exchange_rate_for(target_currency)
+    )
   end
 
   def occurrence_dates_between(start_date:, end_date:, from_date: Date.current)
@@ -53,6 +76,8 @@ class Forecast < ApplicationRecord
 
     dates = if one_time?
       one_time_occurrence_dates(effective_start, effective_end)
+    elsif yearly?
+      yearly_occurrence_dates(effective_start, effective_end)
     elsif spread_across_month?
       distributed_occurrence_dates(effective_start, effective_end)
     else
@@ -63,11 +88,9 @@ class Forecast < ApplicationRecord
   end
 
   def projection_events_between(target_currency:, start_date:, end_date:, from_date: Date.current)
-    converted_projection_amount = signed_projection_amount(target_currency)
-
     if spread_across_month?
       distributed_projection_events(
-        amount: converted_projection_amount,
+        target_currency: target_currency,
         start_date: start_date,
         end_date: end_date,
         from_date: from_date
@@ -77,7 +100,20 @@ class Forecast < ApplicationRecord
         start_date: start_date,
         end_date: end_date,
         from_date: from_date
-      ).map { |occurrence_date| [ occurrence_date, converted_projection_amount ] }
+      ).map do |occurrence_date|
+        [
+          occurrence_date,
+          signed_projection_amount(target_currency: target_currency, occurrence_date: occurrence_date)
+        ]
+      end
+    end
+  end
+
+  def projection_occurrence_dates_between(start_date:, end_date:, from_date: Date.current)
+    if spread_across_month?
+      distributed_occurrence_dates(start_date, end_date, from_date: from_date)
+    else
+      occurrence_dates_between(start_date: start_date, end_date: end_date, from_date: from_date)
     end
   end
 
@@ -95,6 +131,8 @@ class Forecast < ApplicationRecord
 
     due_dates = if one_time?
       occurs_on.present? && occurs_on <= today ? [ occurs_on ] : []
+    elsif yearly?
+      yearly_occurrence_dates(effective_start_date(today.beginning_of_year), today)
     else
       monthly_occurrence_dates(effective_start_date(today.beginning_of_month), today)
     end
@@ -107,7 +145,7 @@ class Forecast < ApplicationRecord
       entry = account.entries.create!(
         name: name,
         date: occurrence_date,
-        amount: entry_amount,
+        amount: entry_amount(occurrence_date: occurrence_date),
         currency: currency,
         entryable: Transaction.new(
           category: category,
@@ -124,6 +162,8 @@ class Forecast < ApplicationRecord
   def schedule_label
     if one_time?
       "One time"
+    elsif yearly?
+      "Yearly on #{occurs_on&.strftime("%b %-d")}"
     elsif spread_across_month?
       "Monthly throughout month"
     else
@@ -185,11 +225,43 @@ class Forecast < ApplicationRecord
       [ ends_on, default_date ].compact.min
     end
 
+    def projection_amount(target_currency:, occurrence_date:, balance_amount: nil)
+      if percentage_of_balance?
+        balance = balance_amount.presence || current_balance_amount(target_currency)
+        balance * periodic_projection_rate
+      else
+        converted_amount(target_currency, occurrence_date: occurrence_date).amount * annual_increase_multiplier(occurrence_date)
+      end
+    end
+
     def one_time_occurrence_dates(start_date, end_date)
       return [] if occurs_on.blank?
       return [] unless occurs_on.between?(start_date, end_date)
 
       [ occurs_on ]
+    end
+
+    def yearly_occurrence_dates(start_date, end_date)
+      return [] if occurs_on.blank?
+
+      cursor_year = effective_start_date(start_date).year
+      limit = effective_end_date(end_date)
+      return [] if limit < start_date
+
+      dates = []
+
+      while cursor_year <= limit.year
+        occurrence_day = [ occurs_on.day, Time.days_in_month(occurs_on.month, cursor_year) ].min
+        occurrence_date = Date.new(cursor_year, occurs_on.month, occurrence_day)
+
+        if occurrence_date >= start_date && occurrence_date <= limit
+          dates << occurrence_date
+        end
+
+        cursor_year += 1
+      end
+
+      dates
     end
 
     def monthly_occurrence_dates(start_date, end_date)
@@ -212,16 +284,16 @@ class Forecast < ApplicationRecord
       dates
     end
 
-    def distributed_occurrence_dates(start_date, end_date)
+    def distributed_occurrence_dates(start_date, end_date, from_date: start_date)
       distributed_projection_events(
-        amount: signed_projection_amount(currency),
+        target_currency: currency,
         start_date: start_date,
         end_date: end_date,
-        from_date: start_date
+        from_date: from_date
       ).map(&:first)
     end
 
-    def distributed_projection_events(amount:, start_date:, end_date:, from_date:)
+    def distributed_projection_events(target_currency:, start_date:, end_date:, from_date:)
       effective_start = [ start_date, from_date ].compact.max
       limit = effective_end_date(end_date)
       return [] if limit < effective_start
@@ -236,8 +308,9 @@ class Forecast < ApplicationRecord
         if month_start <= month_end
           all_dates = (month_start..month_end).to_a
           visible_dates = all_dates.select { |date| date >= effective_start && date <= limit }
+          monthly_amount = signed_projection_amount(target_currency: target_currency, occurrence_date: month_start)
 
-          events.concat(distribute_amount(amount, all_dates, visible_dates))
+          events.concat(distribute_amount(monthly_amount, all_dates, visible_dates))
         end
 
         cursor = cursor.next_month.beginning_of_month
@@ -271,7 +344,50 @@ class Forecast < ApplicationRecord
       ExchangeRate.latest_rate(from_currency: currency, to_currency: target_currency)
     end
 
-    def signed_projection_amount(target_currency)
-      converted_amount(target_currency).amount.then { |converted_amount| income? ? converted_amount : -converted_amount }
+    def current_balance_amount(target_currency)
+      account.balance_money.exchange_to(
+        target_currency,
+        fallback_rate: ExchangeRate.latest_rate(from_currency: account.currency, to_currency: target_currency)
+      ).amount
+    end
+
+    def annual_increase_multiplier(occurrence_date)
+      return BigDecimal("1") if annual_increase_rate.blank? || annual_increase_rate.zero?
+
+      (BigDecimal("1") + annual_increase_rate.to_d / 100) ** completed_years_since(growth_reference_date, occurrence_date)
+    end
+
+    def growth_reference_date
+      starts_on || occurs_on || created_at&.to_date || Date.current
+    end
+
+    def completed_years_since(start_date, end_date)
+      return 0 if start_date.blank? || end_date <= start_date
+
+      years = end_date.year - start_date.year
+      years -= 1 if end_date < start_date.advance(years: years)
+      years
+    end
+
+    def periodic_projection_rate
+      annual_rate.to_d / 100 / periodic_projection_divisor
+    end
+
+    def periodic_projection_divisor
+      yearly? ? BigDecimal("1") : BigDecimal("12")
+    end
+
+    def percentage_of_balance_settings_are_valid
+      return unless percentage_of_balance?
+
+      errors.add(:schedule, "must be monthly or yearly for account-value forecasts") unless monthly? || yearly?
+      errors.add(:annual_increase_rate, "cannot be combined with account-value forecasts") if annual_increase_rate.to_d.positive?
+    end
+
+    def spread_across_month_settings_are_valid
+      return unless spread_across_month?
+
+      errors.add(:schedule, "must be monthly when spread across month is enabled") unless monthly?
+      errors.add(:value_strategy, "must be fixed amount when spread across month is enabled") unless fixed_amount?
     end
 end

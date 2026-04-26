@@ -63,4 +63,66 @@ class Forecast::SimulatorTest < ActiveSupport::TestCase
     assert_equal(-1, simulation.rows.second.delta.amount)
     assert_equal(-1, simulation.rows.third.delta.amount)
   end
+
+  test "applies annual increases to future fixed forecasts" do
+    next_month = Date.current.next_month.beginning_of_month
+
+    Forecast.create!(
+      family: @family,
+      account: @account,
+      name: "Travel",
+      amount: 100,
+      currency: "USD",
+      kind: "expense",
+      schedule: "monthly",
+      day_of_month: 1,
+      starts_on: next_month - 2.years,
+      annual_increase_rate: 10
+    )
+
+    simulation = Forecast::Simulator.new(
+      family: @family,
+      account_ids: [ @account.id ],
+      window: Forecast::Window.from_params(
+        key: "custom",
+        start_date: Date.current.iso8601,
+        end_date: (next_month + 2.days).iso8601
+      )
+    ).call
+
+    forecast_row = simulation.rows.find { |row| row.date == next_month }
+
+    assert_equal(-121, forecast_row.delta.amount)
+  end
+
+  test "uses account balance for monthly account-value yield forecasts" do
+    next_month = Date.current.next_month.beginning_of_month
+
+    Forecast.create!(
+      family: @family,
+      account: accounts(:investment),
+      name: "Investment income",
+      currency: "USD",
+      kind: "income",
+      schedule: "monthly",
+      day_of_month: 1,
+      starts_on: Date.current.beginning_of_month,
+      value_strategy: "percentage_of_balance",
+      annual_rate: 12
+    )
+
+    simulation = Forecast::Simulator.new(
+      family: @family,
+      account_ids: [ accounts(:investment).id ],
+      window: Forecast::Window.from_params(
+        key: "custom",
+        start_date: Date.current.iso8601,
+        end_date: (next_month + 2.days).iso8601
+      )
+    ).call
+
+    forecast_row = simulation.rows.find { |row| row.date == next_month }
+
+    assert_equal(100, forecast_row.delta.amount)
+  end
 end

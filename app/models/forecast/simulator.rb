@@ -114,12 +114,19 @@ class Forecast::Simulator
       previous_balances ||= actual_balances_for(previous_date || Date.current)
 
       accounts.index_with do |account|
-        prior_balance = previous_balances.fetch(account)
-        delta = forecast_amounts_by_account.fetch(account.id, []).sum do |occurrence_date, amount|
-          occurrence_date > (previous_date || Date.current) && occurrence_date <= date ? amount : 0
+        running_balance = previous_balances.fetch(account).amount
+
+        forecast_events_by_account.fetch(account.id, []).each do |occurrence_date, forecast|
+          next unless occurrence_date > (previous_date || Date.current) && occurrence_date <= date
+
+          running_balance += forecast.signed_projection_amount(
+            target_currency: family.currency,
+            occurrence_date: occurrence_date,
+            balance_amount: running_balance
+          )
         end
 
-        Money.new(prior_balance.amount + delta, family.currency)
+        Money.new(running_balance, family.currency)
       end
     end
 
@@ -144,16 +151,15 @@ class Forecast::Simulator
       end
     end
 
-    def forecast_amounts_by_account
-      @forecast_amounts_by_account ||= forecasts.group_by(&:account_id).transform_values do |account_forecasts|
+    def forecast_events_by_account
+      @forecast_events_by_account ||= forecasts.group_by(&:account_id).transform_values do |account_forecasts|
         account_forecasts.flat_map do |forecast|
-          forecast.projection_events_between(
-            target_currency: family.currency,
+          forecast.projection_occurrence_dates_between(
             start_date: [ Date.current, simulation_period.start_date ].min,
             end_date: window.period.end_date,
             from_date: Date.current
-          )
-        end
+          ).map { |occurrence_date| [ occurrence_date, forecast ] }
+        end.sort_by(&:first)
       end
     end
 

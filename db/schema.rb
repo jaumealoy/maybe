@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.2].define(version: 2026_04_12_103130) do
+ActiveRecord::Schema[7.2].define(version: 2026_04_26_091000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pgcrypto"
   enable_extension "plpgsql"
@@ -304,7 +304,10 @@ ActiveRecord::Schema[7.2].define(version: 2026_04_12_103130) do
     t.uuid "account_id", null: false
     t.uuid "category_id"
     t.string "name", null: false
-    t.decimal "amount", precision: 19, scale: 4, null: false
+    t.decimal "amount", precision: 19, scale: 4
+    t.string "value_strategy", default: "fixed_amount", null: false
+    t.decimal "annual_rate", precision: 8, scale: 4
+    t.decimal "annual_increase_rate", precision: 8, scale: 4
     t.string "currency", null: false
     t.string "kind", null: false
     t.string "schedule", null: false

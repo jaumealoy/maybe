@@ -91,6 +91,51 @@ class ForecastsControllerTest < ActionDispatch::IntegrationTest
     assert_equal 1.day.from_now.to_date, Forecast.order(:created_at).last.occurs_on
   end
 
+  test "should create yearly fixed forecast with annual increase" do
+    assert_difference("Forecast.count") do
+      post forecasts_url, params: {
+        account_id: accounts(:depository).id,
+        forecast: {
+          name: "Annual insurance",
+          amount: 250,
+          annual_increase_rate: 4.5,
+          currency: "USD",
+          kind: "expense",
+          schedule: "yearly",
+          occurs_on: Date.current.next_month.beginning_of_month
+        }
+      }
+    end
+
+    assert_redirected_to forecasts_url
+    forecast = Forecast.order(:created_at).last
+    assert_equal "yearly", forecast.schedule
+    assert_equal BigDecimal("4.5"), forecast.annual_increase_rate
+  end
+
+  test "should create account-value forecast" do
+    assert_difference("Forecast.count") do
+      post forecasts_url, params: {
+        account_id: accounts(:investment).id,
+        forecast: {
+          name: "Brokerage yield",
+          value_strategy: "percentage_of_balance",
+          annual_rate: 6,
+          currency: "USD",
+          kind: "income",
+          schedule: "monthly",
+          day_of_month: 1,
+          starts_on: Date.current.beginning_of_month
+        }
+      }
+    end
+
+    assert_redirected_to forecasts_url
+    forecast = Forecast.order(:created_at).last
+    assert_equal "percentage_of_balance", forecast.value_strategy
+    assert_equal BigDecimal("6"), forecast.annual_rate
+  end
+
   test "should create forecast account set" do
     assert_difference("ForecastAccountSet.count") do
       post forecast_account_sets_url, params: {

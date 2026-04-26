@@ -225,7 +225,15 @@
             </div>
 
             <div class="flex flex-wrap items-center gap-2 text-sm text-secondary">
-              <span><%= forecast.amount_money.format %></span>
+              <% if forecast.fixed_amount? %>
+                <span><%= forecast.amount_money.format %></span>
+                <% if forecast.annual_increase_rate.to_d.positive? %>
+                  <span>·</span>
+                  <span><%= number_to_percentage(forecast.annual_increase_rate, precision: 2) %> annual increase</span>
+                <% end %>
+              <% else %>
+                <span><%= number_to_percentage(forecast.annual_rate, precision: 2) %> annual yield</span>
+              <% end %>
               <span>·</span>
               <span><%= forecast.kind.humanize %></span>
               <% if forecast.category.present? %>

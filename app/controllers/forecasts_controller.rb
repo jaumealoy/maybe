@@ -36,7 +36,12 @@ class ForecastsController < ApplicationController
   end
 
   def new
-    @forecast = Current.family.forecasts.new(currency: Current.family.currency, kind: "expense", schedule: "monthly")
+    @forecast = Current.family.forecasts.new(
+      currency: Current.family.currency,
+      kind: "expense",
+      schedule: "monthly",
+      value_strategy: "fixed_amount"
+    )
 
     render layout: false
   end
@@ -127,6 +132,9 @@ class ForecastsController < ApplicationController
         :name,
         :category_id,
         :amount,
+        :value_strategy,
+        :annual_rate,
+        :annual_increase_rate,
         :currency,
         :kind,
         :schedule,

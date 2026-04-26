@@ -21,6 +21,54 @@ class ForecastTest < ActiveSupport::TestCase
     assert_equal "Monthly throughout month", forecast.schedule_label
   end
 
+  test "projection events apply annual increases after each anniversary" do
+    forecast = Forecast.create!(
+      family: families(:dylan_family),
+      account: accounts(:depository),
+      name: "Inflating rent",
+      amount: 100,
+      currency: "USD",
+      kind: "expense",
+      schedule: "monthly",
+      day_of_month: 1,
+      starts_on: Date.new(2024, 1, 1),
+      annual_increase_rate: 10
+    )
+
+    events = forecast.projection_events_between(
+      target_currency: "USD",
+      start_date: Date.new(2026, 1, 1),
+      end_date: Date.new(2026, 1, 31),
+      from_date: Date.new(2026, 1, 1)
+    )
+
+    assert_equal Date.new(2026, 1, 1), events.first.first
+    assert_equal BigDecimal("-121"), events.first.last
+  end
+
+  test "yearly forecasts repeat on the same calendar date" do
+    forecast = Forecast.create!(
+      family: families(:dylan_family),
+      account: accounts(:depository),
+      name: "Insurance",
+      amount: 500,
+      currency: "USD",
+      kind: "expense",
+      schedule: "yearly",
+      occurs_on: Date.new(2025, 6, 15),
+      starts_on: Date.new(2025, 1, 1)
+    )
+
+    dates = forecast.occurrence_dates_between(
+      start_date: Date.new(2026, 1, 1),
+      end_date: Date.new(2027, 12, 31),
+      from_date: Date.new(2026, 1, 1)
+    )
+
+    assert_equal [Date.new(2026, 6, 15), Date.new(2027, 6, 15)], dates
+    assert_equal "Yearly on Jun 15", forecast.schedule_label
+  end
+
   test "monthly occurrence dates ignore already materialized dates and the past" do
     @forecast.materializations.create!(entry: entries(:transaction), occurrence_date: Date.current)
 
@@ -52,5 +100,24 @@ class ForecastTest < ActiveSupport::TestCase
       assert_equal "Electric bill", entry.name
       assert_equal categories(:food_and_drink), entry.transaction.category
     end
+  end
+
+  test "materialize uses the current account balance for account-value forecasts" do
+    forecast = Forecast.create!(
+      family: families(:dylan_family),
+      account: accounts(:investment),
+      name: "Investment income",
+      currency: "USD",
+      kind: "income",
+      schedule: "monthly",
+      day_of_month: Date.current.day,
+      starts_on: Date.current.beginning_of_month,
+      value_strategy: "percentage_of_balance",
+      annual_rate: 12
+    )
+
+    entry = forecast.materialize!(occurrence_date: Date.current)
+
+    assert_equal(-100, entry.amount.to_i)
   end
 end
