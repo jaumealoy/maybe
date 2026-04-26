@@ -227,7 +227,7 @@ class Forecast < ApplicationRecord
 
     def projection_amount(target_currency:, occurrence_date:, balance_amount: nil)
       if percentage_of_balance?
-        balance = balance_amount.presence || current_balance_amount(target_currency)
+        balance = balance_amount.nil? ? current_balance_amount(target_currency) : balance_amount
         balance * periodic_projection_rate
       else
         converted_amount(target_currency, occurrence_date: occurrence_date).amount * annual_increase_multiplier(occurrence_date)
@@ -251,8 +251,8 @@ class Forecast < ApplicationRecord
       dates = []
 
       while cursor_year <= limit.year
-        occurrence_day = [ occurs_on.day, Time.days_in_month(occurs_on.month, cursor_year) ].min
-        occurrence_date = Date.new(cursor_year, occurs_on.month, occurrence_day)
+        day_of_month = [ occurs_on.day, Time.days_in_month(occurs_on.month, cursor_year) ].min
+        occurrence_date = Date.new(cursor_year, occurs_on.month, day_of_month)
 
         if occurrence_date >= start_date && occurrence_date <= limit
           dates << occurrence_date

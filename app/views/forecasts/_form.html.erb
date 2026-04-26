@@ -10,8 +10,8 @@
       <%= select_tag :account_id,
                      options_from_collection_for_select(@accounts, :id, :name, forecast.account_id),
                      prompt: "Select an account",
-                      required: true,
-                      class: "form-field__input" %>
+                     required: true,
+                     class: "form-field__input" %>
     </div>
     <%= form.select :value_strategy,
                     [["Fixed amount", "fixed_amount"], ["Annual % of account balance", "percentage_of_balance"]],
