@@ -133,7 +133,7 @@ class Forecast < ApplicationRecord
     elsif monthly? && spread_across_month?
       "Monthly throughout month"
     elsif annual?
-      "Annual on #{starts_on.strftime("%B")} #{starts_on.day}"
+      starts_on.present? ? "Annual on #{starts_on.strftime("%B")} #{starts_on.day}" : "Annual"
     else
       "Monthly on day #{day_of_month}"
     end
