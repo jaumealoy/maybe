@@ -227,7 +227,7 @@ class Forecast < ApplicationRecord
 
     def projection_amount(target_currency:, occurrence_date:, balance_amount: nil)
       if percentage_of_balance?
-        balance = balance_amount.nil? ? current_balance_amount(target_currency) : balance_amount
+        balance = balance_amount || current_balance_amount(target_currency)
         balance * periodic_projection_rate
       else
         converted_amount(target_currency, occurrence_date: occurrence_date).amount * annual_increase_multiplier(occurrence_date)

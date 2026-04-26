@@ -117,7 +117,8 @@ class ForecastTest < ActiveSupport::TestCase
     )
 
     entry = forecast.materialize!(occurrence_date: Date.current)
+    expected_amount = accounts(:investment).balance * BigDecimal("0.12") / 12
 
-    assert_equal(-100, entry.amount.to_i)
+    assert_equal(-expected_amount.to_i, entry.amount.to_i)
   end
 end

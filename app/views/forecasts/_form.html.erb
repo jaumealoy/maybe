@@ -28,7 +28,7 @@
     <div class="flex items-center justify-between rounded-lg border border-secondary px-3 py-2">
       <div>
         <label id="<%= spread_label_id %>" for="<%= form.field_id(:spread_across_month) %>" class="text-sm font-medium text-primary">Spread across month</label>
-        <p id="<%= spread_description_id %>" class="text-xs text-secondary">Only available for fixed monthly forecasts. Distribute the forecast evenly across the active days in each month.</p>
+        <p id="<%= spread_description_id %>" class="text-xs text-secondary">Only available for fixed monthly forecasts. Other forecast types will fail validation if this is enabled.</p>
       </div>
       <%= form.toggle :spread_across_month, aria: { labelledby: spread_label_id, describedby: spread_description_id } %>
     </div>
