@@ -46,6 +46,38 @@ class ForecastTest < ActiveSupport::TestCase
     assert_equal BigDecimal("-121"), events.first.last
   end
 
+  test "spread monthly forecasts with annual increases prorate partial months" do
+    forecast = Forecast.create!(
+      family: families(:dylan_family),
+      account: accounts(:depository),
+      name: "Inflating utilities",
+      amount: 300,
+      currency: "USD",
+      kind: "expense",
+      schedule: "monthly",
+      spread_across_month: true,
+      starts_on: Date.new(2024, 6, 16),
+      annual_increase_rate: 10
+    )
+
+    first_june = forecast.projection_events_between(
+      target_currency: "USD",
+      start_date: Date.new(2024, 6, 16),
+      end_date: Date.new(2024, 6, 30),
+      from_date: Date.new(2024, 6, 16)
+    )
+
+    second_june = forecast.projection_events_between(
+      target_currency: "USD",
+      start_date: Date.new(2025, 6, 16),
+      end_date: Date.new(2025, 6, 30),
+      from_date: Date.new(2025, 6, 16)
+    )
+
+    assert_equal BigDecimal("-150"), first_june.sum(&:last)
+    assert_equal BigDecimal("-165"), second_june.sum(&:last)
+  end
+
   test "yearly forecasts repeat on the same calendar date" do
     forecast = Forecast.create!(
       family: families(:dylan_family),

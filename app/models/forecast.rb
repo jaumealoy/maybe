@@ -302,15 +302,17 @@ class Forecast < ApplicationRecord
       events = []
 
       while cursor <= limit
-        month_start = [ cursor, effective_start_date(cursor) ].compact.max
-        month_end = [ cursor.end_of_month, effective_end_date(cursor.end_of_month) ].compact.min
+        month_dates = (cursor..cursor.end_of_month).to_a
+        active_dates = month_dates.select do |date|
+          date >= effective_start_date(cursor) && date <= effective_end_date(cursor.end_of_month)
+        end
+        visible_dates = active_dates.select { |date| date >= effective_start && date <= limit }
 
-        if month_start <= month_end
-          all_dates = (month_start..month_end).to_a
-          visible_dates = all_dates.select { |date| date >= effective_start && date <= limit }
-          monthly_amount = signed_projection_amount(target_currency: target_currency, occurrence_date: month_start)
+        if active_dates.any?
+          monthly_amount = signed_projection_amount(target_currency: target_currency, occurrence_date: cursor)
+          prorated_amount = monthly_amount * active_dates.size / month_dates.size
 
-          events.concat(distribute_amount(monthly_amount, all_dates, visible_dates))
+          events.concat(distribute_amount(prorated_amount, active_dates, visible_dates))
         end
 
         cursor = cursor.next_month.beginning_of_month
