@@ -358,7 +358,7 @@ class Forecast < ApplicationRecord
     end
 
     def growth_reference_date
-      starts_on || occurs_on || created_at&.to_date || Date.current
+      @growth_reference_date ||= starts_on || occurs_on || created_at&.to_date || Date.current
     end
 
     def completed_years_since(start_date, end_date)
