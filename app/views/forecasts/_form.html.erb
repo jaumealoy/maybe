@@ -16,7 +16,7 @@
     <%= form.money_field :amount, label: "Amount", required: true %>
     <%= form.select :currency, Current.family.accounts.manual.visible.distinct.pluck(:currency).presence || [ Current.family.currency ], { label: "Currency" }, required: true %>
     <%= form.select :kind, [["Expense", "expense"], ["Income", "income"]], { label: "Type" }, required: true %>
-    <%= form.select :schedule, [["Monthly", "monthly"], ["One time", "one_time"]], { label: "Schedule" }, required: true %>
+    <%= form.select :schedule, [["Monthly", "monthly"], ["Annual", "annual"], ["One time", "one_time"]], { label: "Schedule" }, required: true %>
     <% spread_label_id = form.field_id(:spread_across_month, :label) %>
     <% spread_description_id = form.field_id(:spread_across_month, :description) %>
     <div class="flex items-center justify-between rounded-lg border border-secondary px-3 py-2">

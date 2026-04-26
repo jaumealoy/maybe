@@ -21,6 +21,45 @@ class ForecastTest < ActiveSupport::TestCase
     assert_equal "Monthly throughout month", forecast.schedule_label
   end
 
+  test "annual forecasts recur on the start date anniversary" do
+    forecast = Forecast.new(
+      family: families(:dylan_family),
+      account: accounts(:depository),
+      name: "Annual insurance",
+      amount: 100,
+      currency: "USD",
+      kind: "expense",
+      schedule: "annual",
+      starts_on: Date.new(2024, 5, 10)
+    )
+
+    assert_predicate forecast, :valid?
+    assert_equal "Annual on May 10", forecast.schedule_label
+    assert_equal [
+      Date.new(2026, 5, 10),
+      Date.new(2027, 5, 10)
+    ], forecast.occurrence_dates_between(
+      start_date: Date.new(2026, 1, 1),
+      end_date: Date.new(2027, 12, 31),
+      from_date: Date.new(2026, 1, 1)
+    )
+  end
+
+  test "annual forecasts require a start date" do
+    forecast = Forecast.new(
+      family: families(:dylan_family),
+      account: accounts(:depository),
+      name: "Annual insurance",
+      amount: 100,
+      currency: "USD",
+      kind: "expense",
+      schedule: "annual"
+    )
+
+    assert_not forecast.valid?
+    assert_includes forecast.errors[:starts_on], "can't be blank"
+  end
+
   test "monthly occurrence dates ignore already materialized dates and the past" do
     @forecast.materializations.create!(entry: entries(:transaction), occurrence_date: Date.current)
 

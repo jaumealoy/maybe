@@ -12,7 +12,7 @@ class Forecast < ApplicationRecord
   has_many :materializations, class_name: "Forecast::Materialization", dependent: :destroy
 
   enum :kind, { income: "income", expense: "expense" }, validate: true
-  enum :schedule, { one_time: "one_time", monthly: "monthly" }, validate: true
+  enum :schedule, { one_time: "one_time", monthly: "monthly", annual: "annual" }, validate: true
 
   scope :alphabetically, -> { order(:name) }
   scope :for_accounts, ->(account_ids) {
@@ -25,10 +25,12 @@ class Forecast < ApplicationRecord
   validates :amount, numericality: { greater_than: 0 }
   validates :day_of_month, inclusion: { in: 1..31 }, if: -> { monthly? && !spread_across_month? }
   validates :occurs_on, presence: true, if: :one_time?
+  validates :starts_on, presence: true, if: :annual?
   validate :date_range_is_valid
   validate :account_belongs_to_family
   validate :category_belongs_to_family
   validate :account_supports_manual_entries
+  validate :spread_across_month_requires_monthly_schedule
 
   before_validation :assign_family_from_account
 
@@ -53,8 +55,10 @@ class Forecast < ApplicationRecord
 
     dates = if one_time?
       one_time_occurrence_dates(effective_start, effective_end)
-    elsif spread_across_month?
+    elsif monthly? && spread_across_month?
       distributed_occurrence_dates(effective_start, effective_end)
+    elsif annual?
+      annual_occurrence_dates(effective_start, effective_end)
     else
       monthly_occurrence_dates(effective_start, effective_end)
     end
@@ -65,7 +69,7 @@ class Forecast < ApplicationRecord
   def projection_events_between(target_currency:, start_date:, end_date:, from_date: Date.current)
     converted_projection_amount = signed_projection_amount(target_currency)
 
-    if spread_across_month?
+    if monthly? && spread_across_month?
       distributed_projection_events(
         amount: converted_projection_amount,
         start_date: start_date,
@@ -91,10 +95,12 @@ class Forecast < ApplicationRecord
 
   def materializable_occurrence_date(today: Date.current)
     return nil unless manual_entry_account?
-    return nil if spread_across_month?
+    return nil if monthly? && spread_across_month?
 
     due_dates = if one_time?
       occurs_on.present? && occurs_on <= today ? [ occurs_on ] : []
+    elsif annual?
+      annual_occurrence_dates(effective_start_date(today.beginning_of_year), today)
     else
       monthly_occurrence_dates(effective_start_date(today.beginning_of_month), today)
     end
@@ -124,8 +130,10 @@ class Forecast < ApplicationRecord
   def schedule_label
     if one_time?
       "One time"
-    elsif spread_across_month?
+    elsif monthly? && spread_across_month?
       "Monthly throughout month"
+    elsif annual?
+      "Annual on #{starts_on.strftime("%B")} #{starts_on.day}"
     else
       "Monthly on day #{day_of_month}"
     end
@@ -221,6 +229,26 @@ class Forecast < ApplicationRecord
       ).map(&:first)
     end
 
+    def annual_occurrence_dates(start_date, end_date)
+      return [] if starts_on.blank?
+
+      effective_start = effective_start_date(start_date)
+      limit = effective_end_date(end_date)
+      return [] if limit < effective_start
+
+      (effective_start.year..limit.year).filter_map do |year|
+        occurrence_date = annual_occurrence_date_for(year)
+        occurrence_date if occurrence_date >= effective_start && occurrence_date <= limit
+      end
+    end
+
+    def annual_occurrence_date_for(year)
+      month_start = Date.new(year, starts_on.month, 1)
+      day = [ month_start.end_of_month.day, starts_on.day ].min
+
+      month_start.change(day: day)
+    end
+
     def distributed_projection_events(amount:, start_date:, end_date:, from_date:)
       effective_start = [ start_date, from_date ].compact.max
       limit = effective_end_date(end_date)
@@ -273,5 +301,11 @@ class Forecast < ApplicationRecord
 
     def signed_projection_amount(target_currency)
       converted_amount(target_currency).amount.then { |converted_amount| income? ? converted_amount : -converted_amount }
+    end
+
+    def spread_across_month_requires_monthly_schedule
+      return unless spread_across_month? && !monthly?
+
+      errors.add(:spread_across_month, "is only available for monthly forecasts")
     end
 end
