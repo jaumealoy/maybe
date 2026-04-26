@@ -121,4 +121,61 @@ class ForecastTest < ActiveSupport::TestCase
 
     assert_equal(-expected_amount.to_i, entry.amount.to_i)
   end
+
+  test "entry amount can use an explicit projected balance for account-value forecasts" do
+    forecast = Forecast.create!(
+      family: families(:dylan_family),
+      account: accounts(:investment),
+      name: "Projected yield",
+      currency: "USD",
+      kind: "income",
+      schedule: "monthly",
+      day_of_month: 1,
+      starts_on: Date.current.beginning_of_month,
+      value_strategy: "percentage_of_balance",
+      annual_rate: 12
+    )
+
+    assert_equal BigDecimal("-24"), forecast.entry_amount(occurrence_date: Date.current, balance_amount: 2400)
+  end
+
+  test "account-value forecasts materialize as zero when the account balance is zero" do
+    accounts(:investment).update!(balance: 0)
+
+    forecast = Forecast.create!(
+      family: families(:dylan_family),
+      account: accounts(:investment),
+      name: "Empty yield",
+      currency: "USD",
+      kind: "income",
+      schedule: "monthly",
+      day_of_month: Date.current.day,
+      starts_on: Date.current.beginning_of_month,
+      value_strategy: "percentage_of_balance",
+      annual_rate: 12
+    )
+
+    entry = forecast.materialize!(occurrence_date: Date.current)
+
+    assert_equal 0, entry.amount.to_i
+  end
+
+  test "converted amount uses the occurrence date exchange rate when available" do
+    ExchangeRate.create!(from_currency: "EUR", to_currency: "USD", rate: 1.10, date: Date.current)
+    ExchangeRate.create!(from_currency: "EUR", to_currency: "USD", rate: 1.05, date: 1.day.ago.to_date)
+
+    forecast = Forecast.create!(
+      family: families(:dylan_family),
+      account: accounts(:depository),
+      name: "Consulting",
+      amount: 100,
+      currency: "EUR",
+      kind: "income",
+      schedule: "one_time",
+      occurs_on: Date.current
+    )
+
+    assert_equal BigDecimal("110"), forecast.converted_amount("USD", occurrence_date: Date.current).amount
+    assert_equal BigDecimal("105"), forecast.converted_amount("USD", occurrence_date: 1.day.ago.to_date).amount
+  end
 end

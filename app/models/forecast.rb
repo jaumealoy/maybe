@@ -374,7 +374,10 @@ class Forecast < ApplicationRecord
     end
 
     def periodic_projection_divisor
-      yearly? ? BigDecimal("1") : BigDecimal("12")
+      return BigDecimal("1") if yearly?
+      return BigDecimal("12") if monthly?
+
+      raise ArgumentError, "Account-value forecasts must be monthly or yearly"
     end
 
     def percentage_of_balance_settings_are_valid
