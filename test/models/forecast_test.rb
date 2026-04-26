@@ -60,6 +60,30 @@ class ForecastTest < ActiveSupport::TestCase
     assert_includes forecast.errors[:starts_on], "can't be blank"
   end
 
+  test "annual forecasts clamp leap day anniversaries to month end" do
+    forecast = Forecast.new(
+      family: families(:dylan_family),
+      account: accounts(:depository),
+      name: "Leap day bill",
+      amount: 100,
+      currency: "USD",
+      kind: "expense",
+      schedule: "annual",
+      starts_on: Date.new(2024, 2, 29)
+    )
+
+    assert_equal [
+      Date.new(2025, 2, 28),
+      Date.new(2026, 2, 28),
+      Date.new(2027, 2, 28),
+      Date.new(2028, 2, 29)
+    ], forecast.occurrence_dates_between(
+      start_date: Date.new(2025, 1, 1),
+      end_date: Date.new(2028, 12, 31),
+      from_date: Date.new(2025, 1, 1)
+    )
+  end
+
   test "monthly occurrence dates ignore already materialized dates and the past" do
     @forecast.materializations.create!(entry: entries(:transaction), occurrence_date: Date.current)
 

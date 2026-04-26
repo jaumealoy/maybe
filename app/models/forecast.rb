@@ -243,10 +243,10 @@ class Forecast < ApplicationRecord
     end
 
     def annual_occurrence_date_for(year)
-      month_start = Date.new(year, starts_on.month, 1)
-      day = [ month_start.end_of_month.day, starts_on.day ].min
+      occurrence_month = Date.new(year, starts_on.month, 1)
+      day = [ occurrence_month.end_of_month.day, starts_on.day ].min
 
-      month_start.change(day: day)
+      occurrence_month.change(day: day)
     end
 
     def distributed_projection_events(amount:, start_date:, end_date:, from_date:)
