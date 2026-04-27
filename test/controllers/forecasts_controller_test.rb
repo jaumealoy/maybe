@@ -35,7 +35,9 @@ class ForecastsControllerTest < ActionDispatch::IntegrationTest
 
     assert_response :success
     assert_match ">Delta<", response.body
+    assert_match ">Breakdown<", response.body
   end
+
   test "should use saved account set" do
     get forecasts_url, params: { account_set_id: forecast_account_sets(:liquid_assets).id }
 
@@ -169,5 +171,47 @@ class ForecastsControllerTest < ActionDispatch::IntegrationTest
     end
 
     assert_redirected_to forecasts_url
+  end
+
+  test "should render row breakdown modal" do
+    next_month = Date.current.next_month.beginning_of_month
+
+    Forecast.create!(
+      family: families(:dylan_family),
+      account: accounts(:depository),
+      category: categories(:food_and_drink),
+      name: "Groceries",
+      amount: 310,
+      currency: "USD",
+      kind: "expense",
+      schedule: "monthly",
+      spread_across_month: true,
+      starts_on: next_month
+    )
+
+    simulation = Forecast::Simulator.new(
+      family: families(:dylan_family),
+      account_ids: [ accounts(:depository).id ],
+      window: Forecast::Window.from_params(
+        key: "custom",
+        start_date: next_month.iso8601,
+        end_date: (next_month + 1.day).iso8601
+      )
+    ).call
+
+    row_index = simulation.rows.index { |row| row.date == next_month + 1.day }
+
+    get row_breakdown_forecasts_url, params: {
+      row_index: row_index,
+      window: "custom",
+      start_date: next_month.iso8601,
+      end_date: (next_month + 1.day).iso8601,
+      account_ids: [ accounts(:depository).id ]
+    }
+
+    assert_response :success
+    assert_match "Balance change breakdown", response.body
+    assert_match "Groceries", response.body
+    assert_match "Expense", response.body
   end
 end

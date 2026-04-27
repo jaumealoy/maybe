@@ -1,0 +1,62 @@
+<%= render DS::Dialog.new(width: "lg") do |dialog| %>
+  <% subtitle = if @previous_row.present?
+    "#{format_date(@previous_row.date)} → #{format_date(@row.date)}"
+  else
+    format_date(@row.date)
+  end %>
+
+  <% dialog.with_header(title: "Balance change breakdown", subtitle: subtitle) %>
+
+  <% dialog.with_body do %>
+    <div class="space-y-4">
+      <div class="rounded-lg bg-surface-inset p-4">
+        <div class="flex items-center justify-between gap-4">
+          <div>
+            <p class="text-sm font-medium text-primary">Net change</p>
+            <p class="text-sm text-secondary">Between the selected row and the previous one.</p>
+          </div>
+
+          <p class="text-base font-medium <%= @row.delta&.amount&.positive? ? "text-success" : @row.delta&.amount&.negative? ? "text-destructive" : "text-secondary" %>">
+            <%= @row.delta.present? ? @row.delta.format : "—" %>
+          </p>
+        </div>
+      </div>
+
+      <% if @row.breakdown.any? %>
+        <div class="overflow-x-auto">
+          <table class="min-w-full text-sm">
+            <thead>
+              <tr class="border-b border-secondary text-left text-secondary">
+                <th class="py-2 pr-4 font-medium">Date</th>
+                <th class="py-2 pr-4 font-medium">Concept</th>
+                <th class="py-2 pr-4 font-medium">Category</th>
+                <th class="py-2 pr-4 font-medium">Type</th>
+                <th class="py-2 font-medium text-right">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% @row.breakdown.each do |item| %>
+                <% tone_class = item.kind == "income" ? "text-success" : "text-destructive" %>
+                <tr class="border-b border-alpha-black-25">
+                  <td class="py-2 pr-4 whitespace-nowrap text-primary"><%= format_date(item.date) %></td>
+                  <td class="py-2 pr-4 text-primary"><%= item.concept %></td>
+                  <td class="py-2 pr-4 text-secondary"><%= item.category_name.presence || "—" %></td>
+                  <td class="py-2 pr-4 font-medium <%= tone_class %>"><%= item.kind.humanize %></td>
+                  <td class="py-2 text-right font-medium whitespace-nowrap <%= tone_class %>"><%= item.amount.format %></td>
+                </tr>
+              <% end %>
+            </tbody>
+          </table>
+        </div>
+      <% elsif @row.delta.present? %>
+        <div class="rounded-lg border border-secondary p-4 text-sm text-secondary">
+          No entries or forecasts were found for this interval.
+        </div>
+      <% else %>
+        <div class="rounded-lg border border-secondary p-4 text-sm text-secondary">
+          This is the first row in the simulation, so there is no prior row to compare against.
+        </div>
+      <% end %>
+    </div>
+  <% end %>
+<% end %>

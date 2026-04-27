@@ -309,10 +309,14 @@ class Forecast < ApplicationRecord
         visible_dates = active_dates.select { |date| date >= effective_start && date <= limit }
 
         if active_dates.any?
-          monthly_amount = signed_projection_amount(target_currency: target_currency, occurrence_date: cursor)
-          prorated_amount = monthly_amount * active_dates.size / month_dates.size
-
-          events.concat(distribute_amount(prorated_amount, active_dates, visible_dates))
+          events.concat(
+            distribute_variable_amount(
+              target_currency,
+              month_dates,
+              active_dates,
+              visible_dates
+            )
+          )
         end
 
         cursor = cursor.next_month.beginning_of_month
@@ -321,15 +325,22 @@ class Forecast < ApplicationRecord
       events
     end
 
-    def distribute_amount(amount, all_dates, visible_dates)
-      return [] if all_dates.empty? || visible_dates.empty?
+    def distribute_variable_amount(target_currency, month_dates, active_dates, visible_dates)
+      return [] if active_dates.empty? || visible_dates.empty?
 
-      daily_amount = amount / all_dates.size
-      emitted_dates = []
+      emitted_amounts = []
+      total_amount = active_dates.sum do |date|
+        signed_projection_amount(target_currency: target_currency, occurrence_date: date) / month_dates.size
+      end
 
-      all_dates.each_with_index.with_object([]) do |(date, index), result|
-        allocated_amount = index == all_dates.size - 1 ? amount - emitted_dates.sum : daily_amount
-        emitted_dates << allocated_amount
+      active_dates.each_with_index.with_object([]) do |(date, index), result|
+        allocated_amount = if index == active_dates.size - 1
+          total_amount - emitted_amounts.sum
+        else
+          signed_projection_amount(target_currency: target_currency, occurrence_date: date) / month_dates.size
+        end
+
+        emitted_amounts << allocated_amount
         result << [ date, allocated_amount ] if visible_dates.include?(date)
       end
     end

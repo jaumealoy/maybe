@@ -1,6 +1,8 @@
 class Forecast::Simulator
   Result = Data.define(:accounts, :rows, :chart_series, :window)
-  Row = Data.define(:date, :balances, :total_balance, :projected, :delta)
+  ForecastEvent = Data.define(:date, :amount, :forecast)
+  BreakdownItem = Data.define(:date, :concept, :amount, :category_name, :kind)
+  Row = Data.define(:date, :balances, :total_balance, :projected, :delta, :breakdown)
 
   def initialize(family:, account_ids:, window:, offset: 0)
     @family = family
@@ -34,10 +36,11 @@ class Forecast::Simulator
         previous_total_balance = nil
 
         simulation_checkpoint_dates.filter_map do |date|
-          balances = if date <= Date.current
-            actual_balances_for(date)
+          previous_date = previous_date_for(date)
+          balances, breakdown = if date <= Date.current
+            [ actual_balances_for(date), actual_breakdown_between(previous_date, date) ]
           else
-            projected_balances_for(date, previous_date_for(date), previous_balances)
+            projected_balances_for(date, previous_date, previous_balances)
           end
 
           previous_balances = balances
@@ -49,7 +52,8 @@ class Forecast::Simulator
             balances: balances,
             total_balance: total_balance,
             projected: date > Date.current,
-            delta: previous_total_balance.present? ? Money.new(total_balance.amount - previous_total_balance.amount, family.currency) : nil
+            delta: previous_total_balance.present? ? Money.new(total_balance.amount - previous_total_balance.amount, family.currency) : nil,
+            breakdown: previous_total_balance.present? ? breakdown : []
           )
 
           previous_total_balance = total_balance
@@ -112,29 +116,33 @@ class Forecast::Simulator
 
     def projected_balances_for(date, previous_date, previous_balances)
       previous_balances ||= actual_balances_for(previous_date || Date.current)
+      breakdown = []
 
-      accounts.index_with do |account|
+      balances = accounts.index_with do |account|
         running_balance = previous_balances.fetch(account).amount
 
-        forecast_events_by_account.fetch(account.id, []).each do |occurrence_date, forecast|
-          next unless occurrence_date > (previous_date || Date.current) && occurrence_date <= date
-
-          running_balance += forecast.signed_projection_amount(
+        applicable_forecast_events(account.id, previous_date, date).each do |event|
+          event_amount = event.amount || event.forecast.signed_projection_amount(
             target_currency: family.currency,
-            occurrence_date: occurrence_date,
+            occurrence_date: event.date,
             balance_amount: running_balance
           )
+
+          running_balance += event_amount
+          breakdown << forecast_breakdown_item(event.forecast, event.date, event_amount)
         end
 
         Money.new(running_balance, family.currency)
       end
+
+      [ balances, breakdown.sort_by(&:date) ]
     end
 
     def actual_balance_points_by_account
       @actual_balance_points_by_account ||= accounts.each_with_object({}) do |account, result|
         actual_period_end = [ simulation_period.end_date, Date.current ].min
 
-        if actual_period_end < simulation_period.start_date
+        if actual_period_end < simulation_period.start_date || account.balances.none?
           result[account.id] = {}
           next
         end
@@ -154,12 +162,8 @@ class Forecast::Simulator
     def forecast_events_by_account
       @forecast_events_by_account ||= forecasts.group_by(&:account_id).transform_values do |account_forecasts|
         account_forecasts.flat_map do |forecast|
-          forecast.projection_occurrence_dates_between(
-            start_date: [ Date.current, simulation_period.start_date ].min,
-            end_date: window.period.end_date,
-            from_date: Date.current
-          ).map { |occurrence_date| [ occurrence_date, forecast ] }
-        end.sort_by(&:first)
+          build_forecast_events(forecast)
+        end.sort_by(&:date)
       end
     end
 
@@ -181,5 +185,78 @@ class Forecast::Simulator
 
     def simulation_period
       @simulation_period ||= Period.custom(start_date: [ window.period.start_date, Date.current ].min, end_date: window.period.end_date)
+    end
+
+    def applicable_forecast_events(account_id, previous_date, date)
+      forecast_events_by_account.fetch(account_id, []).select do |event|
+        event.date > (previous_date || Date.current) && event.date <= date
+      end
+    end
+
+    def build_forecast_events(forecast)
+      if forecast.percentage_of_balance?
+        forecast.projection_occurrence_dates_between(
+          start_date: [ Date.current, simulation_period.start_date ].min,
+          end_date: window.period.end_date,
+          from_date: Date.current
+        ).map { |occurrence_date| ForecastEvent.new(date: occurrence_date, amount: nil, forecast: forecast) }
+      else
+        forecast.projection_events_between(
+          target_currency: family.currency,
+          start_date: [ Date.current, simulation_period.start_date ].min,
+          end_date: window.period.end_date,
+          from_date: Date.current
+        ).map { |occurrence_date, amount| ForecastEvent.new(date: occurrence_date, amount: amount, forecast: forecast) }
+      end
+    end
+
+    def actual_breakdown_between(previous_date, date)
+      return [] if previous_date.blank?
+
+      ((previous_date + 1.day)..date).flat_map do |entry_date|
+        actual_entries_by_date.fetch(entry_date, []).map { |entry| entry_breakdown_item(entry) }
+      end
+    end
+
+    def actual_entries_by_date
+      @actual_entries_by_date ||= begin
+        actual_period_end = [ simulation_period.end_date, Date.current ].min
+        if actual_period_end < simulation_period.start_date
+          {}
+        else
+          Entry.visible
+            .where(account_id: filtered_account_ids, date: simulation_period.start_date..actual_period_end)
+            .includes(:entryable)
+            .chronological
+            .to_a
+            .group_by(&:date)
+        end
+      end
+    end
+
+    def entry_breakdown_item(entry)
+      balance_effect = -entry.amount_money.exchange_to(
+        family.currency,
+        date: entry.date,
+        fallback_rate: latest_exchange_rate_for(entry.currency)
+      ).amount
+
+      BreakdownItem.new(
+        date: entry.date,
+        concept: entry.name,
+        amount: Money.new(balance_effect, family.currency),
+        category_name: entry.transaction? ? entry.transaction.category&.name : nil,
+        kind: balance_effect.negative? ? "expense" : "income"
+      )
+    end
+
+    def forecast_breakdown_item(forecast, occurrence_date, amount)
+      BreakdownItem.new(
+        date: occurrence_date,
+        concept: forecast.name,
+        amount: Money.new(amount, family.currency),
+        category_name: forecast.category&.name,
+        kind: forecast.kind
+      )
     end
 end

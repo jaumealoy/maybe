@@ -89,6 +89,28 @@ class ForecastsController < ApplicationController
     redirect_to forecasts_path, notice: "Forecast materialized"
   end
 
+  def row_breakdown
+    @selected_account_set = selected_account_set
+    @window = Forecast::Window.from_params(
+      key: params[:window],
+      offset: params[:offset],
+      start_date: params[:start_date],
+      end_date: params[:end_date]
+    )
+    @simulation = Forecast::Simulator.new(
+      family: Current.family,
+      account_ids: selected_account_ids,
+      window: @window
+    ).call
+
+    row_index = params[:row_index].to_i
+    @row = @simulation.rows[row_index]
+    @previous_row = row_index.positive? ? @simulation.rows[row_index - 1] : nil
+    return head :not_found if @row.blank?
+
+    render layout: false
+  end
+
   private
     def set_accounts
       @accounts = Current.family.accounts.manual.visible.alphabetically

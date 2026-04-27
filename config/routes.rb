@@ -96,6 +96,7 @@ Rails.application.routes.draw do
   end
 
   resources :forecasts, except: :show do
+    get :row_breakdown, on: :collection
     post :materialize, on: :member
   end
   resources :forecast_account_sets, only: %i[create destroy]

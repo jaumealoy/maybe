@@ -97,7 +97,7 @@ class ForecastTest < ActiveSupport::TestCase
       from_date: Date.new(2026, 1, 1)
     )
 
-    assert_equal [Date.new(2026, 6, 15), Date.new(2027, 6, 15)], dates
+    assert_equal [ Date.new(2026, 6, 15), Date.new(2027, 6, 15) ], dates
     assert_equal "Yearly on Jun 15", forecast.schedule_label
   end
 

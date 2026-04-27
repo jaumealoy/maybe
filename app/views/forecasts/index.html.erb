@@ -174,10 +174,11 @@
           <% end %>
           <th class="py-2 pr-4 font-medium">Total</th>
           <th class="py-2 pr-4 font-medium">Delta</th>
+          <th class="py-2 font-medium text-right">Breakdown</th>
         </tr>
       </thead>
       <tbody>
-        <% @simulation.rows.each do |row| %>
+        <% @simulation.rows.each_with_index do |row, index| %>
           <tr class="border-b border-alpha-black-25 <%= "bg-surface-inset" if row.projected %>">
             <td class="py-2 pr-4 text-primary whitespace-nowrap">
               <%= format_date(row.date) %>
@@ -191,6 +192,21 @@
             <td class="py-2 pr-4 text-primary font-medium whitespace-nowrap"><%= row.total_balance.format %></td>
             <td class="py-2 pr-4 font-medium whitespace-nowrap <%= row.delta&.amount&.positive? ? "text-success" : row.delta&.amount&.negative? ? "text-destructive" : "text-secondary" %>">
               <%= row.delta.present? ? row.delta.format : "—" %>
+            </td>
+            <td class="py-2 text-right">
+              <%= link_to row_breakdown_forecasts_path(
+                    row_index: index,
+                    window: @window.key,
+                    offset: @window.offset,
+                    start_date: @window.start_date_value,
+                    end_date: @window.end_date_value,
+                    account_ids: @selected_account_ids,
+                    account_set_id: @selected_account_set&.id
+                  ),
+                  data: { turbo_frame: :modal },
+                  class: "inline-flex items-center text-secondary hover:text-primary" do %>
+                <%= icon("list", size: "sm", color: :current) %>
+              <% end %>
             </td>
           </tr>
         <% end %>

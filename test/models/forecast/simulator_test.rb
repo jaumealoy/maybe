@@ -95,6 +95,93 @@ class Forecast::SimulatorTest < ActiveSupport::TestCase
     assert_equal(-121, forecast_row.delta.amount)
   end
 
+  test "net positive recurring cash flow does not diverge negative with annualized spread expenses" do
+    next_month = Date.current.next_month.beginning_of_month
+
+    Forecast.create!(
+      family: @family,
+      account: @account,
+      name: "Salary",
+      amount: 1000,
+      currency: "USD",
+      kind: "income",
+      schedule: "monthly",
+      day_of_month: 1,
+      starts_on: next_month - 2.years
+    )
+
+    Forecast.create!(
+      family: @family,
+      account: @account,
+      name: "Living expenses",
+      amount: 500,
+      currency: "USD",
+      kind: "expense",
+      schedule: "monthly",
+      spread_across_month: true,
+      starts_on: next_month - 2.years,
+      annual_increase_rate: 10
+    )
+
+    simulation = Forecast::Simulator.new(
+      family: @family,
+      account_ids: [ @account.id ],
+      window: Forecast::Window.from_params(
+        key: "custom",
+        start_date: Date.current.iso8601,
+        end_date: 13.months.from_now.to_date.iso8601
+      )
+    ).call
+
+    assert_operator simulation.rows.last.total_balance.amount, :>, simulation.rows.first.total_balance.amount
+  end
+
+  test "exposes row breakdown data for projected deltas" do
+    next_month = Date.current.next_month.beginning_of_month
+
+    Forecast.create!(
+      family: @family,
+      account: @account,
+      category: categories(:income),
+      name: "Salary",
+      amount: 1000,
+      currency: "USD",
+      kind: "income",
+      schedule: "monthly",
+      day_of_month: 1,
+      starts_on: next_month
+    )
+
+    Forecast.create!(
+      family: @family,
+      account: @account,
+      category: categories(:food_and_drink),
+      name: "Groceries",
+      amount: 310,
+      currency: "USD",
+      kind: "expense",
+      schedule: "monthly",
+      spread_across_month: true,
+      starts_on: next_month
+    )
+
+    simulation = Forecast::Simulator.new(
+      family: @family,
+      account_ids: [ @account.id ],
+      window: Forecast::Window.from_params(
+        key: "custom",
+        start_date: Date.current.iso8601,
+        end_date: (next_month + 1.day).iso8601
+      )
+    ).call
+
+    projected_row = simulation.rows.find { |row| row.date == next_month }
+
+    assert_equal 2, projected_row.breakdown.size
+    assert_equal [ "Groceries", "Salary" ], projected_row.breakdown.map(&:concept).sort
+    assert_equal [ "expense", "income" ], projected_row.breakdown.map(&:kind).sort
+  end
+
   test "uses account balance for monthly account-value yield forecasts" do
     next_month = Date.current.next_month.beginning_of_month
 
