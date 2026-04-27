@@ -37,7 +37,7 @@
             <tbody>
               <% @row.breakdown.each do |item| %>
                 <% tone_class = item.kind == "income" ? "text-success" : "text-destructive" %>
-                <tr class="border-b border-alpha-black-25">
+                <tr class="border-b border-secondary">
                   <td class="py-2 pr-4 whitespace-nowrap text-primary"><%= format_date(item.date) %></td>
                   <td class="py-2 pr-4 text-primary"><%= item.concept %></td>
                   <td class="py-2 pr-4 text-secondary"><%= item.category_name.presence || "—" %></td>
