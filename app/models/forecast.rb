@@ -328,16 +328,17 @@ class Forecast < ApplicationRecord
     def distribute_variable_amount(target_currency, month_dates, active_dates, visible_dates)
       return [] if active_dates.empty? || visible_dates.empty?
 
-      emitted_amounts = []
-      total_amount = active_dates.sum do |date|
+      daily_amounts = active_dates.index_with do |date|
         signed_projection_amount(target_currency: target_currency, occurrence_date: date) / month_dates.size
       end
+      emitted_amounts = []
+      total_amount = daily_amounts.values.sum
 
       active_dates.each_with_index.with_object([]) do |(date, index), result|
         allocated_amount = if index == active_dates.size - 1
           total_amount - emitted_amounts.sum
         else
-          signed_projection_amount(target_currency: target_currency, occurrence_date: date) / month_dates.size
+          daily_amounts.fetch(date)
         end
 
         emitted_amounts << allocated_amount

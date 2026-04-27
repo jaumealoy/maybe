@@ -104,9 +104,10 @@ class ForecastsController < ApplicationController
     ).call
 
     row_index = params[:row_index].to_i
+    return head :not_found if row_index.negative? || row_index >= @simulation.rows.length
+
     @row = @simulation.rows[row_index]
     @previous_row = row_index.positive? ? @simulation.rows[row_index - 1] : nil
-    return head :not_found if @row.blank?
 
     render layout: false
   end

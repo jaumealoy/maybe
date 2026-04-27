@@ -142,7 +142,7 @@ class Forecast::Simulator
       @actual_balance_points_by_account ||= accounts.each_with_object({}) do |account, result|
         actual_period_end = [ simulation_period.end_date, Date.current ].min
 
-        if actual_period_end < simulation_period.start_date || account.balances.none?
+        if actual_period_end < simulation_period.start_date || account_ids_with_balance_history.exclude?(account.id)
           result[account.id] = {}
           next
         end
@@ -181,6 +181,10 @@ class Forecast::Simulator
 
     def filtered_account_ids
       @filtered_account_ids ||= accounts.map(&:id)
+    end
+
+    def account_ids_with_balance_history
+      @account_ids_with_balance_history ||= Balance.where(account_id: filtered_account_ids).distinct.pluck(:account_id)
     end
 
     def simulation_period
